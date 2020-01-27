@@ -42,6 +42,23 @@ namespace ddtree
     void buildbranches();
     void setbranchesaddress();
   };
+
+  class gtree
+  {
+  public:
+    gtree(TTree* nt) : fnt(nt) { buildbranches(); }
+    gtree(TFile* inf, std::string treename) { fnt = (TTree*)inf->Get(treename.c_str()); setbranchesaddress(); }
+    // branches
+    int candSize_gen;
+    float pT_gen[MAX_CAND];
+    float y_gen[MAX_CAND];
+    TTree* nt() { return fnt; }
+    void fillcands(gtree* igtree, int j);
+  private:
+    TTree* fnt;
+    void buildbranches();
+    void setbranchesaddress();
+  };
 }
 
 void ddtree::dtree::buildbranches()
@@ -63,6 +80,13 @@ void ddtree::dtree::buildbranches()
   fnt->Branch("mva", mva, "mva[candSize]/F");
 }
 
+void ddtree::gtree::buildbranches()
+{
+  fnt->Branch("candSize_gen", &candSize_gen);
+  fnt->Branch("pT_gen", pT_gen, "pT_gen[candSize_gen]/F");
+  fnt->Branch("y_gen", y_gen, "y_gen[candSize_gen]/F");
+}
+
 void ddtree::dtree::setbranchesaddress()
 {
   fnt->SetBranchAddress("Ntrkoffline", &Ntrkoffline);
@@ -80,6 +104,13 @@ void ddtree::dtree::setbranchesaddress()
   fnt->SetBranchAddress("flavor", flavor);
   fnt->SetBranchAddress("dca", dca);
   fnt->SetBranchAddress("mva", mva);
+}
+
+void ddtree::gtree::setbranchesaddress()
+{
+  fnt->SetBranchAddress("candSize_gen", &candSize_gen);
+  fnt->SetBranchAddress("pT_gen", pT_gen);
+  fnt->SetBranchAddress("y_gen", y_gen);
 }
 
 void ddtree::dtree::fillcands(dtree* idtree)
@@ -103,6 +134,13 @@ void ddtree::dtree::fillcands(dtree* idtree, int j)
   dca[candSize] = idtree->dca[j];
   mva[candSize] = idtree->mva[j];
   candSize++;
+}
+
+void ddtree::gtree::fillcands(gtree* igtree, int j)
+{
+  pT_gen[candSize_gen] = igtree->pT_gen[j];
+  y_gen[candSize_gen] = igtree->y_gen[j];
+  candSize_gen++;
 }
 
 namespace ddtree
