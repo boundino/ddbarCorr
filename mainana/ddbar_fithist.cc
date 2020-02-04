@@ -33,10 +33,10 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
   std::string outputname = "plots/" + outputdir;
   xjjroot::mkdir(outputname+"/idx/");
 
-  std::vector<std::string> label = {
-    kinfo->texpt1(),
-    kinfo->texyd(),
-    kinfo->texcent()
+  std::vector<TString> label = {
+    kinfo->texpt1().c_str(),
+    kinfo->texyd().c_str(),
+    kinfo->texcent().c_str()
   };
 
   xjjroot::dfitter* fitter = new xjjroot::dfitter("YL");
@@ -119,10 +119,10 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
   leg1->Draw();
   xjjroot::drawCMSleft();
   xjjroot::drawCMSright("2018 PbPb 5.02 TeV");
-  c->SaveAs(Form("%s/chdphi_step0.pdf", outputname.c_str()));
+  // c->SaveAs(Form("%s/chdphi_step0.pdf", outputname.c_str()));
   c->cd(1);
   hdphi_sdbd_noscale->Draw("same");
-  c->SaveAs(Form("%s/chdphi_step1.pdf", outputname.c_str()));
+  // c->SaveAs(Form("%s/chdphi_step1.pdf", outputname.c_str()));
   c->cd(1);
   hdphi_sdbd->Draw("same");
   c->cd(2);
@@ -131,7 +131,7 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
   leg2->Draw();
   xjjroot::drawCMSleft();
   xjjroot::drawCMSright("2018 PbPb 5.02 TeV");
-  c->SaveAs(Form("%s/chdphi_step2.pdf", outputname.c_str()));
+  // c->SaveAs(Form("%s/chdphi_step2.pdf", outputname.c_str()));
 
   delete c;
   c = new TCanvas("c", "", 1800, 600);
@@ -142,10 +142,10 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
   leg1->Draw();
   xjjroot::drawCMSleft();
   xjjroot::drawCMSright("2018 PbPb 5.02 TeV");
-  c->SaveAs(Form("%s/chdphi_step0.pdf", outputname.c_str()));
+  // c->SaveAs(Form("%s/chdphi_step0.pdf", outputname.c_str()));
   c->cd(1);
   hdphi_sdbd_noscale->Draw("same");
-  c->SaveAs(Form("%s/chdphi_step1.pdf", outputname.c_str()));
+  // c->SaveAs(Form("%s/chdphi_step1.pdf", outputname.c_str()));
   c->cd(1);
   hdphi_sdbd->Draw("same");
   c->cd(2);
@@ -188,7 +188,7 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
   leg11->Draw();
   xjjroot::drawCMSleft();
   xjjroot::drawCMSright("2018 PbPb 5.02 TeV");
-  c->SaveAs(Form("%s/chdphi_panel1.pdf", outputname.c_str()));
+  // c->SaveAs(Form("%s/chdphi_panel1.pdf", outputname.c_str()));
 
   delete c;
   c = new TCanvas("c", "", 600, 600);
@@ -197,7 +197,7 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
   leg2->Draw();
   xjjroot::drawCMSleft();
   xjjroot::drawCMSright("2018 PbPb 5.02 TeV");
-  c->SaveAs(Form("%s/chdphi_panel2.pdf", outputname.c_str()));
+  // c->SaveAs(Form("%s/chdphi_panel2.pdf", outputname.c_str()));
 
   TFile* outf = new TFile(Form("rootfiles/%s/fithist.root", outputdir.c_str()), "recreate");
   kinfo->write();

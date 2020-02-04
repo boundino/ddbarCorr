@@ -1,4 +1,4 @@
 [submodule "includes/csetup"]
 	path = includes/csetup
-	url = https://github.com/boundino/csetup.git
+	url = https://github.com/boundino/csetup
 	branch = master

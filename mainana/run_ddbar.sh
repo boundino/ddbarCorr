@@ -1,15 +1,14 @@
 #!/bin/bash
 
-# run=(0 1 2 3 4 5)
-run=(2)
-##       0   1   2   3   4   5   6   7   8   9   10  11  12  13  14  15  16  17 18 19 20
-pt1min=( 4   5   5   5   4   4   5   5   5   4   4   4   4   4)
-pt1max=( 999 999 999 999 999 999 999 999 999 999 999 999 999 999)
-pt2min=( 1   2   4   5   3   3   3   3   3   2   2   2   2   2)
-pt2max=( 999 3   5   15  999 999 999 999 999 999 999 999 999 999)
-dy=(     1   1   1   1   2   0.5 1   1   1   2   0.5 1   1   1)
-cmin=(   0   0   0   0   0   0   0   10  30  0   0   0   10  30)
-cmax=(   80  80  80  80  80  80  10  30  80  80  80  10  30  80)
+run=(0)
+##       0
+pt1min=( 4)
+pt1max=( 999)
+pt2min=( 2)
+pt2max=( 999)
+dy=(     1)
+cmin=(   0)
+cmax=(   80)
 label=2pi
 ##
 inputdata=/export/d00/scratch/jwang/DntupleRun2018/skim_d0ana_PbPb2018_HIMinimumBias.root
@@ -27,5 +26,5 @@ do
     [[ $RUN_FITHIST -eq 1 ]] && { ./ddbar_fithist.exe "rootfiles/$outputdir/savehist.root" $outputdir ; }
 done
 
-rm ddbar_fithist.exe
-rm ddbar_savehist.exe
+rm ddbar_fithist.exe > /dev/null 2>&1
+rm ddbar_savehist.exe > /dev/null 2>&1
