@@ -19,8 +19,8 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
   std::vector<TH1F*> hmass_incl(binfo->nphibin(), 0), hmass_sdbd(binfo->nphibin(), 0);
   for(int k=0; k<binfo->nphibin(); k++)
     {
-      hmass_incl[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_incl", k));
-      hmass_sdbd[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_sdbd", k));
+      hmass_incl[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_incl_sc", k));
+      hmass_sdbd[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_sdbd_sc", k));
     }
   TH1F* hmass_trig = (TH1F*)inf->Get("hmass_trig");
 
@@ -58,12 +58,14 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
       fitter->fit(hmass_incl[k], hmassmc_sgl, hmassmc_swp, "PbPb", Form("%s/idx/c%s", outputname.c_str(), hmass_incl[k]->GetName()), label);
       hdphi_incl->SetBinContent(k+1, fitter->GetY());
       hdphi_incl->SetBinError(k+1, fitter->GetYE());
+      hdphi_incl->Sumw2();
 
       fitter->fit(hmass_sdbd[k], hmassmc_sgl, hmassmc_swp, "PbPb", Form("%s/idx/c%s", outputname.c_str(), hmass_sdbd[k]->GetName()), label);
       hdphi_sdbd_noscale->SetBinContent(k+1, fitter->GetY());
       hdphi_sdbd_noscale->SetBinError(k+1, fitter->GetYE());
       hdphi_sdbd->SetBinContent(k+1, fitter->GetY()*sidebandscale);
       hdphi_sdbd->SetBinError(k+1, fitter->GetYE()*sidebandscale);
+      hdphi_sdbd->Sumw2();
 
       hdphi_sub->SetBinContent(k+1, hdphi_incl->GetBinContent(k+1)-hdphi_sdbd->GetBinContent(k+1));
       hdphi_sub->SetBinError(k+1, sqrt(fabs(hdphi_incl->GetBinError(k+1)*hdphi_incl->GetBinError(k+1)+hdphi_sdbd->GetBinError(k+1)*hdphi_sdbd->GetBinError(k+1))));
