@@ -8,6 +8,8 @@
 #include "dfitter.h"
 #include "ddbar.h"
 
+#include <algorithm>
+
 void ddbar_fithist(std::string inputname, std::string outputdir)
 {
   TFile* inf = TFile::Open(inputname.c_str());
@@ -17,10 +19,12 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
   TH1F* hmassmc_sgl = (TH1F*)inf->Get("hmassmc_sgl");
   TH1F* hmassmc_swp = (TH1F*)inf->Get("hmassmc_swp");
   std::vector<TH1F*> hmass_incl(binfo->nphibin(), 0), hmass_sdbd(binfo->nphibin(), 0);
+  std::vector<TH1F*> hmass_incl_det(binfo->nphibin(), 0);
   for(int k=0; k<binfo->nphibin(); k++)
     {
-      hmass_incl[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_incl_sc", k));
-      hmass_sdbd[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_sdbd_sc", k));
+      hmass_incl[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_incl", k));
+      hmass_sdbd[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_sdbd", k));
+      hmass_incl_det[k] = (TH1F*)inf->Get(Form("hmass_phi%d_incl_det", k));
     }
   TH1F* hmass_trig = (TH1F*)inf->Get("hmass_trig");
 
@@ -29,6 +33,13 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
   TH1F* hdphi_sdbd_noscale = new TH1F("hdphi_sdbd_noscale", ";#Delta#phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / #pi;N(D^{0}-#bar{D^{#lower[0.2]{0}}})", binfo->nphibin(), binfo->phibin().data());
   TH1F* hdphi_sub = new TH1F("hdphi_sub", ";#Delta#phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / #pi;N(D^{0}-#bar{D^{#lower[0.2]{0}}})", binfo->nphibin(), binfo->phibin().data());
   TH1F* hdphi_sub_norm = new TH1F("hdphi_sub_norm", ";#Delta#phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / #pi;1/N dN/d#Delta#phi", binfo->nphibin(), binfo->phibin().data());
+
+  std::vector<float> phi_range;
+  for (auto i = 0; i <= binfo->nphibin() / 2; ++i) {
+    phi_range.push_back(-1 + i * 0.25);
+  }
+  std::cout << binfo->nphibin() << "\n";
+  TH1F* hphi_incl = new TH1F("hphi_incl", ";detector #phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / #pi;N(D^{0}-#bar{D^{#lower[0.2]{0}}})", binfo->nphibin() / 2, phi_range.data());
 
   std::string outputname = "plots/" + outputdir;
   xjjroot::mkdir(outputname+"/idx/");
@@ -59,6 +70,13 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
       hdphi_incl->SetBinContent(k+1, fitter->GetY());
       hdphi_incl->SetBinError(k+1, fitter->GetYE());
       hdphi_incl->Sumw2();
+
+      if (k < binfo->nphibin() / 2) {
+        fitter->fit(hmass_incl_det[k], hmassmc_sgl, hmassmc_swp, "PbPb", Form("%s/idx/c%s", outputname.c_str(), hmass_incl_det[k]->GetName()), label);
+        hphi_incl->SetBinContent(k+1, fitter->GetY());
+        hphi_incl->SetBinError(k+1, fitter->GetYE());
+        hphi_incl->Sumw2();
+      }
 
       fitter->fit(hmass_sdbd[k], hmassmc_sgl, hmassmc_swp, "PbPb", Form("%s/idx/c%s", outputname.c_str(), hmass_sdbd[k]->GetName()), label);
       hdphi_sdbd_noscale->SetBinContent(k+1, fitter->GetY());
@@ -204,6 +222,7 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
   TFile* outf = new TFile(Form("rootfiles/%s/fithist.root", outputdir.c_str()), "recreate");
   kinfo->write();
   hdphi_incl->Write();
+  hphi_incl->Write();
   hdphi_sdbd_noscale->Write();
   hdphi_sdbd->Write();
   hdphi_sub->Write();

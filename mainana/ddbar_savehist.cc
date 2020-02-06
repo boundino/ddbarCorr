@@ -1,6 +1,7 @@
 #include "TFile.h"
 #include "TH1F.h"
 #include "TEfficiency.h"
+#include "TMath.h"
 
 #include <vector>
 #include <string>
@@ -11,6 +12,10 @@
 #include "dtree.h"
 #include "ddbar.h"
 
+const int event_cutoff = (int) 1e10;
+// const int event_cutoff = (int) 1e6;
+const float dmass_min = 1.72;
+const float dmass_max = 2.0;
 const std::vector<int> centralities = {0, 30, 50, 80};
 const unsigned nCentrality = centralities.size() - 1;
 
@@ -54,40 +59,58 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
   ddtree::dtree* dnt = new ddtree::dtree(infdata, "d0ana/VertexCompositeNtuple");
 
   std::vector<TH1F*> hmass_incl(binfo->nphibin(), 0), hmass_sdbd(binfo->nphibin(), 0);
-  std::vector<TH1F*> hmass_incl_scaled(binfo->nphibin(), 0), hmass_sdbd_scaled(binfo->nphibin(), 0);
+  std::vector<TH1F*> hmass_incl_scaled(binfo->nphibin(), 0), hmass_sdbd_scaled(binfo->nphibin(), 0), hmass_incl_det(binfo->nphibin(), 0);
+  TH1F* phi = new TH1F("phi", "#phi", 36, -TMath::Pi(), TMath::Pi());
+  TH1F* phi_sc = new TH1F("phi_sc", "#phi eff. scaled", 36, -TMath::Pi(), TMath::Pi());
+  TH2F* phipt = new TH2F("phipt", "#phi / #p_{T}", 36, -TMath::Pi(), TMath::Pi(), 60, 2, 8);
+  TH2F* phipt_sc = new TH2F("phipt_sc", "#phi / #p_{T} eff. scaled", 36, -TMath::Pi(), TMath::Pi(), 60, 2, 8);
   for(int k=0; k<binfo->nphibin(); k++) 
     {
       // inclusive or signal region
-      hmass_incl[k] = new TH1F(Form("hmass_dphi%d_incl", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, 1.7, 2.0);
+      hmass_incl[k] = new TH1F(Form("hmass_dphi%d_incl", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
       // side-band region
-      hmass_sdbd[k] = new TH1F(Form("hmass_dphi%d_sdbd", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, 1.7, 2.0);
+      hmass_sdbd[k] = new TH1F(Form("hmass_dphi%d_sdbd", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
       // scaled mass
-      hmass_incl_scaled[k] = new TH1F(Form("hmass_dphi%d_incl_sc", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, 1.7, 2.0);
-      hmass_sdbd_scaled[k] = new TH1F(Form("hmass_dphi%d_sdbd_sc", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, 1.7, 2.0);
+      hmass_incl_scaled[k] = new TH1F(Form("hmass_dphi%d_incl_sc", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
+      hmass_sdbd_scaled[k] = new TH1F(Form("hmass_dphi%d_sdbd_sc", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
+      hmass_incl_det[k] = new TH1F(Form("hmass_phi%d_incl_det", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
     }
-  TH1F* hmass_trig = new TH1F("hmass_trig", ";m_{K#pi} (GeV/c^{2});Entries", 60, 1.7, 2.0);
+  TH1F* hmass_trig = new TH1F("hmass_trig", ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
 
   int nentries = dnt->nt()->GetEntries();
   for(int i=0; i<nentries; i++)
     {
-      if(i == 3000000) break;
+      if(i >= event_cutoff) break;
       if(i%100000==0) xjjc::progressbar(i, nentries);
       dnt->nt()->GetEntry(i);
       if(dnt->centrality > centmax*2 || dnt->centrality < centmin*2) continue;
 
+      unsigned centID = centralityID(dnt->centrality);
       for(int j=0; j<dnt->candSize; j++)
         {
-          float primary_pT = dnt->pT[j];
           if(dnt->pT[j] < pt1min || dnt->pT[j] > pt1max) continue;
           if(fabs(dnt->y[j]) > yd) continue;
           hmass_trig->Fill(dnt->mass[j]);
-
           // int fillid = -1;
           int isinclusive = 0, issideband = 0;
           if(fabs(dnt->mass[j] - MASS_DZERO) < ddbar::signalwidth) isinclusive = 1;
           if(fabs(dnt->mass[j] - MASS_DZERO) > ddbar::sideband_l && fabs(dnt->mass[j] - MASS_DZERO) < ddbar::sideband_h) issideband = 1;
           if(!(isinclusive+issideband)) continue;
 
+          float primary_pT = dnt->pT[j];
+          // Get phi distribution
+          phi->Fill(dnt->phi[j]);
+          phipt->Fill(dnt->phi[j], dnt->pT[j]);
+          double scale = 1/eff[centID]->GetEfficiency(eff[centID]->FindFixBin(primary_pT));
+          phi_sc->Fill(dnt->phi[j], scale);
+          phipt_sc->Fill(dnt->phi[j], dnt->pT[j], scale);
+
+          std::vector<float> phis;
+          for (auto i = 0; i <= 8; ++i) {
+            phis.push_back((-1 + i * 0.25) * TMath::Pi());
+          }
+          unsigned iphi = std::lower_bound(phis.begin(), phis.end(), dnt->phi[j]) - phis.begin() - 1;
+          hmass_incl_det[iphi]->Fill(dnt->mass[j]);
           for(int l=0; l<dnt->candSize; l++)
             {
               float associate_pT = dnt->pT[l];
@@ -96,7 +119,6 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
               if(dnt->pT[l] >= dnt->pT[j] || fabs(dnt->pT[l]-dnt->pT[j])<0.0001 || dnt->flavor[l]*dnt->flavor[j] > 0) continue;
 
               // Calculate the scale factor from MC efficiency
-              unsigned centID = centralityID(dnt->centrality);
               double scale_primary = 1/eff[centID]->GetEfficiency(eff[centID]->FindFixBin(primary_pT));
               double scale_associate = 1/eff[centID]->GetEfficiency(eff[centID]->FindFixBin(associate_pT));
               // Fill the other D0 mass in the specific phi region
@@ -145,6 +167,16 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
       hh->Sumw2();
       hh->Write();
     }
+  for(auto& hh : hmass_incl_det)
+    {
+      hh->Sumw2();
+      hh->Write();
+    }
+  phi->Write();
+  phi_sc->Sumw2();
+  phi_sc->Write();
+  phipt->Write();
+  phipt_sc->Write();
   kinfo->write();
   binfo->write();
   outf->Close();
