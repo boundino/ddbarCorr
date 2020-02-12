@@ -9,6 +9,7 @@
 #include "TCanvas.h"
 #include "TEfficiency.h"
 #include "TString.h"
+#include "TMath.h"
 
 #include <string>
 #include <iostream>
@@ -18,6 +19,8 @@ const std::vector<int> centralities = {0, 30, 50, 80};
 const unsigned nCentrality = centralities.size() - 1;
 const std::string MVA_FILE = "DntupleRun2018/mvas/BDTCuts_finePtBins_PrompD0_PbPb_cent%dto%d_trkPt1GeV.root";
 const std::string MC_TREE = "d0ana_mc_genmatchunswap/VertexCompositeNtuple";
+
+//const Double_t phibinLowEdges[5] = {-TMath::Pi(),-1.,0.,1.,TMath::Pi()};
 
 const bool true_mc = false;
 
@@ -61,17 +64,21 @@ void ddbar_getEfficiency(std::string inputmc, std::string out_name,
   std::vector<TH2D*> hist_bdtcut(nCentrality);
   std::vector<TH1D*> hist_gen(nCentrality);
   std::vector<TH1D*> hist_reco(nCentrality);
+  std::vector<TH1D*> eff(nCentrality);
 
   for (unsigned i = 0; i < nCentrality; ++i) {
     TFile* mva = TFile::Open(TString::Format(MVA_FILE.c_str(), centralities[i], centralities[i + 1]));
     // Create the histograms in the output file directory
     outfile.cd();
     hist_bdtcut[i] = (TH2D*) mva->Get("hist_bdtcut");
-    hist_gen[i] = (TH1D*) hist_bdtcut[i]->ProjectionY("hgen" + centralityString(i));
-    hist_gen[i]->Reset();
-    hist_gen[i]->SetTitle("gen D candidates " + centralityString(i));
+    // Get pT bins from MVA histogram
+    const int nbins = hist_bdtcut[i]->GetNbinsY();
+    Double_t ptbins[nbins];
+    hist_bdtcut[i]->GetYaxis()->GetLowEdge(ptbins);
+    hist_gen[i] = new TH1D("hgen"+centralityString(i),"gen D candidates "+centralityString(i),nbins-1,ptbins);
     hist_reco[i] = (TH1D*) hist_gen[i]->Clone("hreco" + centralityString(i));
     hist_reco[i]->SetTitle("reco D candidates " + centralityString(i));
+    eff[i] = new TH1D("efficiency_"+centralityString(i),"reco D / gen D "+centralityString(i),nbins-1,ptbins);
     mva->Close();
   }
 
@@ -84,6 +91,8 @@ void ddbar_getEfficiency(std::string inputmc, std::string out_name,
   TTreeReaderArray<Float_t> pT_gen(reader, "pT_gen");
   TTreeReaderArray<Float_t> y(reader, "y");
   TTreeReaderArray<Float_t> y_gen(reader, "y_gen");
+  TTreeReaderArray<Float_t> phi(reader,"phi");
+//  TTreeReaderArray<Float_t> phi_gen(reader,"phi_gen");
   // TTreeReaderArray<Int_t> dID1(reader, "DauID1_gen");
   // TTreeReaderArray<Int_t> dID2(reader, "DauID2_gen");
 
@@ -113,21 +122,22 @@ void ddbar_getEfficiency(std::string inputmc, std::string out_name,
       // }
       hist_gen[centralityID(*centrality)]->Fill(pT_gen[iCand]);
     }
+    
   }
   outfile.cd();
   gStyle->SetOptStat(0);
   TCanvas* can = new TCanvas("c", "", 1200, 600);
   for (unsigned i = 0; i < nCentrality; ++i) {
+    hist_gen[i]->Sumw2();
+    hist_reco[i]->Sumw2();
     hist_gen[i]->Draw();
     savePlot("gen_pt", can, i);
     hist_reco[i]->Draw();
     savePlot("reco_pt", can, i);
-    TEfficiency eff(*hist_reco[i], *hist_gen[i]);
-    eff.SetName("efficiency_" + centralityString(i));
-    eff.SetTitle("reco D / gen D " + centralityString(i));
-    eff.Draw();
+    eff[i]->Divide(hist_reco[i],hist_gen[i]);
+    eff[i]->Draw();
     savePlot("eff", can, i);
-    eff.Write();
+    eff[i]->Write();
   }
   outfile.Write();
 }
