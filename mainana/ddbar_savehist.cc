@@ -17,6 +17,7 @@ const int event_cutoff = (int) 1e10;
 const float dmass_min = 1.72;
 const float dmass_max = 2.0;
 const std::vector<int> centralities = {0, 30, 50, 80};
+const std::vector<double> d_centralities = {0.,30.,50.,80.};
 const unsigned nCentrality = centralities.size() - 1;
 
 TString centralityString(unsigned iCent) {
@@ -60,6 +61,7 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
 
   std::vector<TH1F*> hmass_incl(binfo->nphibin(), 0), hmass_sdbd(binfo->nphibin(), 0);
   std::vector<TH1F*> hmass_incl_scaled(binfo->nphibin(), 0), hmass_sdbd_scaled(binfo->nphibin(), 0), hmass_incl_det(binfo->nphibin(), 0);
+  TH1F* cent = new TH1F("cent","Centrality",nCentrality,d_centralities.data());
   TH1F* phi = new TH1F("phi", "#phi", 36, -TMath::Pi(), TMath::Pi());
   TH1F* phi_sc = new TH1F("phi_sc", "#phi eff. scaled", 36, -TMath::Pi(), TMath::Pi());
   TH1F* phi_incl = new TH1F("phi_incl","Inclusive #phi eff. scaled",36,-TMath::Pi(),TMath::Pi());
@@ -72,6 +74,7 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
   TH1F* pt_sdbd = new TH1F("pt_sdbd", "Sideband pT eff. scaled", 40, 2, 16);
   TH1F* dca_incl = new TH1F("dca_incl", "Inclusive dca eff. scaled", 100, 0, 1);
   TH1F* dca_sdbd = new TH1F("dca_sdbd", "Sideband dca eff. scaled", 100, 0, 1);
+  TH1F* hiBin = new TH1F("hiBin","Data hiBin",200,0,200);
   for(int k=0; k<binfo->nphibin(); k++)
     {
       // inclusive or signal region
@@ -84,7 +87,8 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
       hmass_incl_det[k] = new TH1F(Form("hmass_phi%d_incl_det", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
     }
   TH1F* hmass_trig = new TH1F("hmass_trig", ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
-  std::cout << "starting loop\n";
+  TH1F* mc_cent = (TH1F*)ineff->Get("mc_cent");
+  
   int nentries = dnt->nt()->GetEntries();
   for(int i=0; i<nentries; i++)
     {
@@ -92,7 +96,8 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
       if(i%100000==0) xjjc::progressbar(i, nentries);
       dnt->nt()->GetEntry(i);
       if(dnt->centrality > centmax*2 || dnt->centrality < centmin*2) continue;
-
+      cent->Fill(dnt->centrality/2);
+      hiBin->Fill(dnt->centrality);
       unsigned centID = centralityID(dnt->centrality);
       for(int j=0; j<dnt->candSize; j++)
         {
@@ -215,6 +220,11 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
       hh->Sumw2();
       hh->Write();
     }
+  std::cout << cent->GetEntries() << "\n";
+  cent->Sumw2();
+  cent->Scale(1./cent->Integral(),"width");
+  cent->Write();
+  mc_cent->Write();
   phi->Write();
   phi_sc->Sumw2();
   phi_sc->Write();
@@ -232,6 +242,7 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
   dca_sgl->Write();
   phipt->Write();
   phipt_sc->Write();
+  hiBin->Write();
   kinfo->write();
   binfo->write();
   outf->Close();

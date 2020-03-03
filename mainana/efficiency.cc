@@ -10,12 +10,14 @@
 #include "TEfficiency.h"
 #include "TString.h"
 #include "TMath.h"
+#include "TRandomGen.h"
 
 #include <string>
 #include <iostream>
 #include <algorithm>
 
 const std::vector<int> centralities = {0, 30, 50, 80};
+const std::vector<double> d_centralities = {0.,30.,50.,80.};
 const unsigned nCentrality = centralities.size() - 1;
 const std::string MVA_FILE = "DntupleRun2018/mvas/BDTCuts_finePtBins_PrompD0_PbPb_cent%dto%d_trkPt1GeV.root";
 const std::string MC_TREE = "d0ana_mc_genmatchunswap/VertexCompositeNtuple";
@@ -62,23 +64,25 @@ void ddbar_getEfficiency(std::string inputmc, std::string out_name,
   TFile outfile(out_name.c_str(), "recreate");
   // Get MVA bin width / pT (should be 0.065) from BDT histogram
   std::vector<TH2D*> hist_bdtcut(nCentrality);
-  std::vector<TH1D*> hist_gen(nCentrality);
-  std::vector<TH1D*> hist_reco(nCentrality);
-  std::vector<TH1D*> eff(nCentrality);
-
+  std::vector<TH2D*> hist_gen(nCentrality);
+  std::vector<TH2D*> hist_reco(nCentrality);
+  std::vector<TH2D*> eff(nCentrality);
+  TH1F* mc_cent = new TH1F("mc_cent","MC Reco Centrality",nCentrality,d_centralities.data());
+  TH1F* mc_hiBin = new TH1F("mc_hiBin","MC hiBin",200,0,200);
   for (unsigned i = 0; i < nCentrality; ++i) {
     TFile* mva = TFile::Open(TString::Format(MVA_FILE.c_str(), centralities[i], centralities[i + 1]));
     // Create the histograms in the output file directory
     outfile.cd();
     hist_bdtcut[i] = (TH2D*) mva->Get("hist_bdtcut");
+    hist_bdtcut[i]->Rebin2D(1,3);
     // Get pT bins from MVA histogram
     const int nbins = hist_bdtcut[i]->GetNbinsY();
     Double_t ptbins[nbins];
     hist_bdtcut[i]->GetYaxis()->GetLowEdge(ptbins);
-    hist_gen[i] = new TH1D("hgen"+centralityString(i),"gen D candidates "+centralityString(i),nbins-1,ptbins);
-    hist_reco[i] = (TH1D*) hist_gen[i]->Clone("hreco" + centralityString(i));
+    hist_gen[i] = new TH2D("hgen"+centralityString(i),"gen D candidates "+centralityString(i),nbins-1,ptbins,8,-TMath::Pi(),TMath::Pi());
+    hist_reco[i] = (TH2D*) hist_gen[i]->Clone("hreco" + centralityString(i));
     hist_reco[i]->SetTitle("reco D candidates " + centralityString(i));
-    eff[i] = new TH1D("efficiency_"+centralityString(i),"reco D / gen D "+centralityString(i),nbins-1,ptbins);
+    eff[i] = new TH2D("efficiency_"+centralityString(i),"reco D / gen D "+centralityString(i),nbins-1,ptbins,8,-TMath::Pi(),TMath::Pi());
     mva->Close();
   }
 
@@ -92,6 +96,8 @@ void ddbar_getEfficiency(std::string inputmc, std::string out_name,
   TTreeReaderArray<Float_t> y(reader, "y");
   TTreeReaderArray<Float_t> y_gen(reader, "y_gen");
   TTreeReaderArray<Float_t> phi(reader,"phi");
+  // randomly fill gen phi bins (assumption that gen phi is flat)
+  TRandomMixMax* r = new TRandomMixMax();
 //  TTreeReaderArray<Float_t> phi_gen(reader,"phi_gen");
   // TTreeReaderArray<Int_t> dID1(reader, "DauID1_gen");
   // TTreeReaderArray<Int_t> dID2(reader, "DauID2_gen");
@@ -101,12 +107,14 @@ void ddbar_getEfficiency(std::string inputmc, std::string out_name,
     if(*centrality > centmax*2 || *centrality < centmin*2) {
       continue;
     }
+    mc_cent->Fill((*centrality)/2);
+    mc_hiBin->Fill((*centrality));
     // select reco candidates
     for (unsigned iCand = 0; iCand < pT.GetSize(); ++iCand) {
       if (pT[iCand] < ptmin || pT[iCand] > ptmax || fabs(y[iCand]) > dy) {
         continue;
       }
-      hist_reco[centralityID(*centrality)]->Fill(pT[iCand]);
+      hist_reco[centralityID(*centrality)]->Fill(pT[iCand],phi[iCand]);
     }
     // select gen candidates
     for (unsigned iCand = 0; iCand < pT_gen.GetSize(); ++iCand) {
@@ -120,7 +128,7 @@ void ddbar_getEfficiency(std::string inputmc, std::string out_name,
       //     continue;
       //   }
       // }
-      hist_gen[centralityID(*centrality)]->Fill(pT_gen[iCand]);
+      hist_gen[centralityID(*centrality)]->Fill(pT_gen[iCand],r->Uniform(-TMath::Pi(),TMath::Pi()));
     }
     
   }
@@ -139,6 +147,10 @@ void ddbar_getEfficiency(std::string inputmc, std::string out_name,
     savePlot("eff", can, i);
     eff[i]->Write();
   }
+  mc_cent->Sumw2();
+  mc_cent->Scale(1./mc_cent->Integral(),"width");
+  mc_cent->Write();
+  mc_hiBin->Write();
   outfile.Write();
 }
 
