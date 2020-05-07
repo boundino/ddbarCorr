@@ -50,7 +50,7 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
 
   // Get D0 efficiency from MC
   TFile* ineff = TFile::Open(inputeff.c_str());
-  std::vector<TH2D*> eff(3);
+  std::vector<TH2D*> eff(nCentrality);
   for (unsigned i = 0; i < nCentrality; ++i)
     {
       eff[i] = (TH2D*) ineff->Get("efficiency_" + centralityString(i));
@@ -112,10 +112,11 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
 
           float primary_pT = dnt->pT[j];
           float primary_y = dnt->y[j];
+          float primary_phi = dnt->phi[j];
           // Get phi distribution
           phi->Fill(dnt->phi[j]);
           phipt->Fill(dnt->phi[j], dnt->pT[j]);
-          double scale = 1./eff[centID]->GetBinContent(eff[centID]->FindBin(primary_pT));
+          double scale = 1./eff[centID]->GetBinContent(eff[centID]->FindBin(primary_pT,primary_phi));
           phi_sc->Fill(dnt->phi[j], scale);
           if(isinclusive) {
             phi_incl->Fill(dnt->phi[j], scale);
@@ -141,13 +142,14 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
             {
               float associate_pT = dnt->pT[l];
               float associate_y = dnt->y[l];
+              float associate_phi = dnt->phi[l];
               if(dnt->pT[l] < pt2min || dnt->pT[l] > pt2max) continue;
               if(fabs(dnt->y[l]) > yd) continue;
               if(dnt->pT[l] >= dnt->pT[j] || fabs(dnt->pT[l]-dnt->pT[j])<0.0001 || dnt->flavor[l]*dnt->flavor[j] > 0) continue;
 
               // Calculate the scale factor from MC efficiency
-              double scale_primary = 1./eff[centID]->GetBinContent(eff[centID]->FindBin(primary_pT));
-              double scale_associate = 1./eff[centID]->GetBinContent(eff[centID]->FindBin(associate_pT));
+              double scale_primary = 1./eff[centID]->GetBinContent(eff[centID]->FindBin(primary_pT,primary_phi));
+              double scale_associate = 1./eff[centID]->GetBinContent(eff[centID]->FindBin(associate_pT,associate_phi));
               // Fill the other D0 mass in the specific phi region
               int idphi = -1;
               float dphi = binfo->getdphi(dnt->phi[j], dnt->phi[l], idphi);

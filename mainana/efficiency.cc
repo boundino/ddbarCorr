@@ -1,6 +1,7 @@
 #include "TROOT.h"
 #include "TStyle.h"
 #include "TFile.h"
+#include "TH3D.h"
 #include "TH2D.h"
 #include "TH1D.h"
 #include "TTreeReader.h"
@@ -79,10 +80,18 @@ void ddbar_getEfficiency(std::string inputmc, std::string out_name,
     const int nbins = hist_bdtcut[i]->GetNbinsY();
     Double_t ptbins[nbins];
     hist_bdtcut[i]->GetYaxis()->GetLowEdge(ptbins);
-    hist_gen[i] = new TH2D("hgen"+centralityString(i),"gen D candidates "+centralityString(i),nbins-1,ptbins,8,-TMath::Pi(),TMath::Pi());
+    Double_t ptbins_reduced[nbins/4+1];
+    // Reduce pt granularity while keeping bdt binning
+    for(int i=0;i<nbins;i++)
+    {
+      if(i%4==0) ptbins_reduced[i/4] = ptbins[i];
+      else if(i==(nbins-1)) ptbins_reduced[nbins/4] = ptbins[nbins-1];
+    }
+    for(int i=0;i<(nbins/4+1);i++) std::cout << ptbins_reduced[i] << "\n";
+    hist_gen[i] = new TH2D("hgen"+centralityString(i),"gen D candidates "+centralityString(i),nbins/4,ptbins_reduced,16,-TMath::Pi(),TMath::Pi());
     hist_reco[i] = (TH2D*) hist_gen[i]->Clone("hreco" + centralityString(i));
     hist_reco[i]->SetTitle("reco D candidates " + centralityString(i));
-    eff[i] = new TH2D("efficiency_"+centralityString(i),"reco D / gen D "+centralityString(i),nbins-1,ptbins,8,-TMath::Pi(),TMath::Pi());
+    eff[i] = new TH2D("efficiency_"+centralityString(i),"reco D / gen D "+centralityString(i),nbins/4,ptbins_reduced,16,-TMath::Pi(),TMath::Pi());
     mva->Close();
   }
 
