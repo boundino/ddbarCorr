@@ -2,13 +2,13 @@
 
 run=(0)
 ##       0
-pt1min=( 4)
-pt1max=( 999)
-pt2min=( 2)
-pt2max=( 999)
-dy=(     1)
-cmin=(   0)
-cmax=(   80)
+pt1min=( 2 4 6 8 4 6 8 6 8 8)
+pt1max=( 999 999 999 999 999 999 999 999 999 999)
+pt2min=( 2 2 2 2 4 4 4 6 6 8)
+pt2max=( 999 999 999 999 999 999 999 999 999 999)
+dy=(     1 1 1 1 1 1 1 1 1 1)
+cmin=(   0 0 0 0 0 0 0 0 0 0)
+cmax=(   80 80 80 80 80 80 80 80 80 80)
 label=4pi
 ##
 inputdata=DntupleRun2018/skim_d0ana_PbPb2018_HIMinimumBias.root
@@ -18,7 +18,7 @@ eff=efficiency.root
 
 [[ -d DntupleRun2018 ]] || ln -s /data/wangj/DntupleRun2018
 
-run_efficiency=0
+run_efficiency=1
 
 while [ "$1" != "" ]; do
     case $1 in
