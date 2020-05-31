@@ -87,7 +87,6 @@ void ddbar_getEfficiency(std::string inputmc, std::string out_name,
       if(i%4==0) ptbins_reduced[i/4] = ptbins[i];
       else if(i==(nbins-1)) ptbins_reduced[nbins/4] = ptbins[nbins-1];
     }
-    for(int i=0;i<(nbins/4+1);i++) std::cout << ptbins_reduced[i] << "\n";
     hist_gen[i] = new TH2D("hgen"+centralityString(i),"gen D candidates "+centralityString(i),nbins/4,ptbins_reduced,16,-TMath::Pi(),TMath::Pi());
     hist_reco[i] = (TH2D*) hist_gen[i]->Clone("hreco" + centralityString(i));
     hist_reco[i]->SetTitle("reco D candidates " + centralityString(i));
@@ -151,8 +150,8 @@ void ddbar_getEfficiency(std::string inputmc, std::string out_name,
     savePlot("gen_pt", can, i);
     hist_reco[i]->Draw();
     savePlot("reco_pt", can, i);
-    eff[i]->Divide(hist_reco[i],hist_gen[i]);
-    eff[i]->Draw();
+    eff[i]->Divide(hist_reco[i],hist_gen[i], 1, 1, "B");
+    eff[i]->Draw("colorz");
     savePlot("eff", can, i);
     eff[i]->Write();
   }
