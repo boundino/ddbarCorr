@@ -19,6 +19,7 @@ eff=efficiency.root
 [[ -d DntupleRun2018 ]] || ln -s /data/wangj/DntupleRun2018
 
 run_efficiency=1
+[[ -f efficiency.root ]] || run_efficiency=0
 
 while [ "$1" != "" ]; do
     case $1 in
@@ -37,10 +38,11 @@ if [ "$run_efficiency" = "1" ]; then
     rm eff > /dev/null 2>&1
 fi
 
+
 RUN_SAVEHIST=${1:-0}
 [[ $RUN_SAVEHIST -eq 1 || $# == 0 ]] && { g++ ddbar_savehist.cc $(root-config --libs --cflags) -I"../includes/" -g -o ddbar_savehist.exe || exit 1 ; }
 RUN_FITHIST=${2:-0}
-[[ $RUN_FITHIST -eq 1 || $# == 0 ]] && { g++ ddbar_fithist.cc $(root-config --libs --cflags) -I"../includes/" -g -o ddbar_fithist.exe || exit 1 ; }
+[[ $RUN_FITHIST -eq 1 || $# == 0 ]] && { g++ ddbar_fithist.cc -L/usr/lib/root -lRooFit -lRooFitCore -lMinuit $(root-config --libs --cflags) -I"../includes/" -g -o ddbar_fithist.exe || exit 1 ; }
 
 for rr in ${run[@]}
 do
@@ -49,5 +51,5 @@ do
     [[ $RUN_FITHIST -eq 1 ]] && { ./ddbar_fithist.exe "rootfiles/$outputdir/savehist.root" $outputdir ; }
 done
 
-rm ddbar_fithist.exe > /dev/null 2>&1
-rm ddbar_savehist.exe > /dev/null 2>&1
+#rm ddbar_fithist.exe > /dev/null 2>&1
+#rm ddbar_savehist.exe > /dev/null 2>&1

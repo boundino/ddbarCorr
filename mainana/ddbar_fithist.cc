@@ -5,7 +5,8 @@
 #include <TString.h>
 #include "xjjcuti.h"
 #include "xjjrootuti.h"
-#include "dfitter.h"
+// #include "dfitter.h"
+#include "droofit.h"
 #include "ddbar.h"
 
 #include <algorithm>
@@ -22,11 +23,14 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
   std::vector<TH1F*> hmass_incl_det(binfo->nphibin(), 0);
   for(int k=0; k<binfo->nphibin(); k++)
     {
-      hmass_incl[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_incl", k));
-      hmass_sdbd[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_sdbd", k));
+      hmass_incl[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_incl_sc", k));
+      hmass_sdbd[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_sdbd_sc", k));
       hmass_incl_det[k] = (TH1F*)inf->Get(Form("hmass_phi%d_incl_det", k));
     }
   TH1F* hmass_trig = (TH1F*)inf->Get("hmass_trig");
+
+  // import D0 mass and weight tree
+  TTree* tmass = (TTree*) inf->Get("tmass");
 
   TH1F* hdphi_incl = new TH1F("hdphi_incl", ";#Delta#phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / #pi;N(D^{0}-#bar{D^{#lower[0.2]{0}}})", binfo->nphibin(), binfo->phibin().data());
   TH1F* hdphi_sdbd = new TH1F("hdphi_sdbd", ";#Delta#phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / #pi;N(D^{0}-#bar{D^{#lower[0.2]{0}}})", binfo->nphibin(), binfo->phibin().data());
@@ -50,23 +54,28 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
     kinfo->texcent().c_str()
   };
 
-  xjjroot::dfitter* fitter = new xjjroot::dfitter("YL");
+  // xjjroot::dfitter* fitter = new xjjroot::dfitter("YL");
+  xjjroot::droofit* fitter = new xjjroot::droofit("YLR");
   fitter->SetSignalregion(ddbar::signalwidth);
   fitter->SetSidebandL(ddbar::sideband_l);
   fitter->SetSidebandH(ddbar::sideband_h);
   // fitter->SetTexLinespc(0.0);
 
   fitter->fit(hmass_trig, hmassmc_sgl, hmassmc_swp, "PbPb", Form("%s/c%s", outputname.c_str(), hmass_trig->GetName()), label);
+  // fitter->fit(tmass, 0, "PbPb", Form("%s/c%s", outputname.c_str(), hmass_trig->GetName()), label);
   // float sidebandscale = ddbar::signalwidth/(ddbar::sideband_h-ddbar::sideband_l);
-  TF1* f_not_mass = fitter->GetFun_not_mass();
-  float sidebandscale = f_not_mass->Integral(MASS_DZERO-ddbar::signalwidth, MASS_DZERO+ddbar::signalwidth) / 
-    (f_not_mass->Integral(MASS_DZERO-ddbar::sideband_h, MASS_DZERO-ddbar::sideband_l) + f_not_mass->Integral(MASS_DZERO+ddbar::sideband_l, MASS_DZERO+ddbar::sideband_h));
+  // TF1* f_not_mass = fitter->GetFun_not_mass();
+  // float sidebandscale = f_not_mass->Integral(MASS_DZERO-ddbar::signalwidth, MASS_DZERO+ddbar::signalwidth) / 
+  //   (f_not_mass->Integral(MASS_DZERO-ddbar::sideband_h, MASS_DZERO-ddbar::sideband_l) + f_not_mass->Integral(MASS_DZERO+ddbar::sideband_l, MASS_DZERO+ddbar::sideband_h));
+
+  float sidebandscale = fitter->GetSidebandScale();
   label.push_back(kinfo->texpt2());
   fitter->SetOption("Y");
   for(int k=0; k<binfo->nphibin(); k++)
     {
       label.push_back(Form("%s < #Delta#phi/#pi < %s", xjjc::number_remove_zero(binfo->phibin()[k]).c_str(), xjjc::number_remove_zero(binfo->phibin()[k+1]).c_str()));
-      fitter->fit(hmass_incl[k], hmassmc_sgl, hmassmc_swp, "PbPb", Form("%s/idx/c%s", outputname.c_str(), hmass_incl[k]->GetName()), label);
+      // fitter->fit(hmass_incl[k], hmassmc_sgl, hmassmc_swp, "PbPb", Form("%s/idx/c%s", outputname.c_str(), hmass_incl[k]->GetName()), label);
+      fitter->fit(tmass, 1, k, "PbPb", Form("%s/idx/c%s", outputname.c_str(), hmass_incl[k]->GetName()), label);
       hdphi_incl->SetBinContent(k+1, fitter->GetY());
       hdphi_incl->SetBinError(k+1, fitter->GetYE());
       hdphi_incl->Sumw2();
@@ -78,7 +87,8 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
         hphi_incl->Sumw2();
       }
 
-      fitter->fit(hmass_sdbd[k], hmassmc_sgl, hmassmc_swp, "PbPb", Form("%s/idx/c%s", outputname.c_str(), hmass_sdbd[k]->GetName()), label);
+      // fitter->fit(hmass_sdbd[k], hmassmc_sgl, hmassmc_swp, "PbPb", Form("%s/idx/c%s", outputname.c_str(), hmass_sdbd[k]->GetName()), label);
+      fitter->fit(tmass, 0, k, "PbPb", Form("%s/idx/c%s", outputname.c_str(), hmass_sdbd[k]->GetName()), label);
       hdphi_sdbd_noscale->SetBinContent(k+1, fitter->GetY());
       hdphi_sdbd_noscale->SetBinError(k+1, fitter->GetYE());
       hdphi_sdbd->SetBinContent(k+1, fitter->GetY()*sidebandscale);

@@ -1,7 +1,10 @@
+#include "TEfficiency.h"
 #include "TFile.h"
 #include "TH1F.h"
-#include "TEfficiency.h"
+#include "TH2F.h"
 #include "TMath.h"
+#include "TTree.h"
+
 
 #include <vector>
 #include <string>
@@ -13,7 +16,6 @@
 #include "ddbar.h"
 
 const int event_cutoff = (int) 1e10;
-// const int event_cutoff = (int) 1e6;
 const float dmass_min = 1.72;
 const float dmass_max = 2.0;
 const std::vector<int> centralities = {0, 30, 50, 80};
@@ -31,6 +33,11 @@ unsigned centralityID(int centrality) {
   unsigned id = std::lower_bound(centralities.begin(), centralities.end(),
                                  centrality, [=] (float i, float j) {return i < j / 2;}) - centralities.begin();
   return id - 1;
+}
+
+void saveTree(){
+
+  return;
 }
 
 void ddbar_savehist(std::string inputdata, std::string inputmc, std::string output,
@@ -59,6 +66,11 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
   TFile* infdata = TFile::Open(inputdata.c_str());
   ddtree::dtree* dnt = new ddtree::dtree(infdata, "d0ana/VertexCompositeNtuple");
 
+  std::string outputname = "rootfiles/" + output + "/savehist.root";
+  xjjroot::mkdir(outputname.c_str());
+  TFile *outf = new TFile(outputname.c_str(), "recreate");
+
+  // Histograms to be filled
   std::vector<TH1F*> hmass_incl(binfo->nphibin(), 0), hmass_sdbd(binfo->nphibin(), 0);
   std::vector<TH1F*> hmass_incl_scaled(binfo->nphibin(), 0), hmass_sdbd_scaled(binfo->nphibin(), 0), hmass_incl_det(binfo->nphibin(), 0);
   TH1F* cent = new TH1F("cent","Centrality",nCentrality,d_centralities.data());
@@ -75,6 +87,20 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
   TH1F* dca_incl = new TH1F("dca_incl", "Inclusive dca eff. scaled", 100, 0, 1);
   TH1F* dca_sdbd = new TH1F("dca_sdbd", "Sideband dca eff. scaled", 100, 0, 1);
   TH1F* hiBin = new TH1F("hiBin","Data hiBin",200,0,200);
+
+  Float_t mass, weight;
+  Int_t evt;
+  Int_t npri, ncand;
+  Int_t signal;
+  Int_t iPhi;
+  TTree *dmass = new TTree("tmass", "D0 mass");
+  dmass->Branch("evt", &evt, "evt/I");
+  dmass->Branch("npri", &npri, "npri/I");
+  dmass->Branch("signal", &signal, "signal/I");
+  dmass->Branch("iPhi", &iPhi, "iPhi/I");
+  dmass->Branch("mass", &mass, "mass/F");
+  dmass->Branch("weight", &weight, "weight/F");
+
   for(int k=0; k<binfo->nphibin(); k++)
     {
       // inclusive or signal region
@@ -88,7 +114,8 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
     }
   TH1F* hmass_trig = new TH1F("hmass_trig", ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
   TH1F* mc_cent = (TH1F*)ineff->Get("mc_cent");
-  
+
+  // Event loop
   int nentries = dnt->nt()->GetEntries();
   for(int i=0; i<nentries; i++)
     {
@@ -96,6 +123,9 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
       if(i%100000==0) xjjc::progressbar(i, nentries);
       dnt->nt()->GetEntry(i);
       if(dnt->centrality > centmax*2 || dnt->centrality < centmin*2) continue;
+      evt = i;
+      npri = 0;
+
       cent->Fill(dnt->centrality/2);
       hiBin->Fill(dnt->centrality);
       unsigned centID = centralityID(dnt->centrality);
@@ -109,6 +139,7 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
           if(fabs(dnt->mass[j] - MASS_DZERO) < ddbar::signalwidth) isinclusive = 1;
           if(fabs(dnt->mass[j] - MASS_DZERO) > ddbar::sideband_l && fabs(dnt->mass[j] - MASS_DZERO) < ddbar::sideband_h) issideband = 1;
           if(!(isinclusive+issideband)) continue;
+          npri++;
 
           float primary_pT = dnt->pT[j];
           float primary_y = dnt->y[j];
@@ -164,6 +195,11 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
                   hmass_sdbd[idphi]->Fill(dnt->mass[l]);
                   hmass_sdbd_scaled[idphi]->Fill(dnt->mass[l], scale_primary * scale_associate);
                 }
+              mass = dnt->mass[l];
+              weight = scale_primary * scale_associate;
+              signal = isinclusive;
+              iPhi = idphi;
+              dmass->Fill();
             }
         }
     }
@@ -190,9 +226,6 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
   y_sgl->Add(y_sdbd, -1);
   pt_sgl->Add(pt_sdbd, -1);
   pt_sgl->Add(pt_sdbd, -1);
-  std::string outputname = "rootfiles/" + output + "/savehist.root";
-  xjjroot::mkdir(outputname.c_str());
-  TFile* outf = new TFile(outputname.c_str(), "recreate");
   outf->cd();
   hmassmc_sgl->Write();
   hmassmc_swp->Write();
