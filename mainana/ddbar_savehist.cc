@@ -11,6 +11,7 @@
 
 #include "dtree.h"
 #include "ddbar.h"
+#include "event_mixer.h"
 
 const int event_cutoff = (int) 1e10;
 // const int event_cutoff = (int) 1e6;
@@ -90,25 +91,33 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
   TH1F* mc_cent = (TH1F*)ineff->Get("mc_cent");
   
   int nentries = dnt->nt()->GetEntries();
+
+  EventMixer mixer = EventMixer(dnt);
+
   for(int i=0; i<nentries; i++)
     {
       if(i >= event_cutoff) break;
-      if(i%100000==0) xjjc::progressbar(i, nentries);
+      if(i%1==0) xjjc::progressbar(i, nentries);
       dnt->nt()->GetEntry(i);
       if(dnt->centrality > centmax*2 || dnt->centrality < centmin*2) continue;
       cent->Fill(dnt->centrality/2);
       hiBin->Fill(dnt->centrality);
       unsigned centID = centralityID(dnt->centrality);
+      if(mixer.findSimilarEvent(dnt->centrality,dnt->bestvtxZ,i) == -1)
+      {
+        std::cout << "Event mixing failed for entry " << i << "!!!\n";
+        continue;
+      }
       for(int j=0; j<dnt->candSize; j++)
         {
           if(dnt->pT[j] < pt1min || dnt->pT[j] > pt1max) continue;
           if(fabs(dnt->y[j]) > yd) continue;
           hmass_trig->Fill(dnt->mass[j]);
           // int fillid = -1;
-          int isinclusive = 0, issideband = 0;
-          if(fabs(dnt->mass[j] - MASS_DZERO) < ddbar::signalwidth) isinclusive = 1;
-          if(fabs(dnt->mass[j] - MASS_DZERO) > ddbar::sideband_l && fabs(dnt->mass[j] - MASS_DZERO) < ddbar::sideband_h) issideband = 1;
-          if(!(isinclusive+issideband)) continue;
+          //int isinclusive = 0, issideband = 0;
+          //if(fabs(dnt->mass[j] - MASS_DZERO) < ddbar::signalwidth) isinclusive = 1;
+          //if(fabs(dnt->mass[j] - MASS_DZERO) > ddbar::sideband_l && fabs(dnt->mass[j] - MASS_DZERO) < ddbar::sideband_h) issideband = 1;
+          //if(!(isinclusive+issideband)) continue;
 
           float primary_pT = dnt->pT[j];
           float primary_y = dnt->y[j];
@@ -117,18 +126,18 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
           phipt->Fill(dnt->phi[j], dnt->pT[j]);
           double scale = 1./eff[centID]->GetBinContent(eff[centID]->FindBin(primary_pT));
           phi_sc->Fill(dnt->phi[j], scale);
-          if(isinclusive) {
+          //if(isinclusive) {
             phi_incl->Fill(dnt->phi[j], scale);
             y_incl->Fill(dnt->y[j], scale);
             pt_incl->Fill(dnt->pT[j], scale);
             dca_incl->Fill(dnt->dca[j], scale);
-          }
-          if(issideband) {
-            y_sdbd->Fill(dnt->y[j], scale);
-            phi_sdbd->Fill(dnt->phi[j], scale);
-            pt_sdbd->Fill(dnt->pT[j], scale);
-            dca_sdbd->Fill(dnt->dca[j], scale);
-          }
+          //}
+          //if(issideband) {
+            y_sdbd->Fill(mixer.mix_tree->y[j], scale);
+            phi_sdbd->Fill(mixer.mix_tree->phi[j], scale);
+            pt_sdbd->Fill(mixer.mix_tree->pT[j], scale);
+            dca_sdbd->Fill(mixer.mix_tree->dca[j], scale);
+          //}
           phipt_sc->Fill(dnt->phi[j], dnt->pT[j], scale);
 
           std::vector<float> phis;
@@ -152,16 +161,32 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
               int idphi = -1;
               float dphi = binfo->getdphi(dnt->phi[j], dnt->phi[l], idphi);
               if(idphi < 0) { std::cout<<__FUNCTION__<<": error: invalid dphi calculated."<<std::endl; }
-              if(isinclusive)
-                {
+//              if(isinclusive)
+//                {
                   hmass_incl[idphi]->Fill(dnt->mass[l]);
                   hmass_incl_scaled[idphi]->Fill(dnt->mass[l], scale_primary * scale_associate);
-                }
-              if(issideband)
-                {
-                  hmass_sdbd[idphi]->Fill(dnt->mass[l]);
-                  hmass_sdbd_scaled[idphi]->Fill(dnt->mass[l], scale_primary * scale_associate);
-                }
+//                }
+//              if(issideband)
+//                {
+//                  hmass_sdbd[idphi]->Fill(dnt->mass[l]);
+//                  hmass_sdbd_scaled[idphi]->Fill(dnt->mass[l], scale_primary * scale_associate);
+//                }
+            }
+          for(int m=0;m<mixer.mix_tree->candSize;m++)
+            {
+              float mixed_pT = mixer.mix_tree->pT[m];
+              float mixed_y = mixer.mix_tree->y[m];
+              if(mixer.mix_tree->pT[m] < pt2min || mixer.mix_tree->pT[m] > pt2max) continue;
+              if(fabs(mixer.mix_tree->y[m]) > yd) continue;
+              if(mixer.mix_tree->pT[m] >= dnt->pT[j] || fabs(mixer.mix_tree->pT[m]-dnt->pT[j])<0.0001 || mixer.mix_tree->flavor[m]*dnt->flavor[j] > 0) continue;
+
+              double scale_primary = 1./eff[centID]->GetBinContent(eff[centID]->FindBin(primary_pT));
+              double scale_associate = 1./eff[centID]->GetBinContent(eff[centID]->FindBin(mixed_pT));
+              int idphi = -1;
+              float dphi = binfo->getdphi(dnt->phi[j], mixer.mix_tree->phi[m], idphi);
+              if(idphi<0) {std::cout<<__FUNCTION__<< ": error: invalid dphi calculated."<<std::endl;}
+              hmass_sdbd[idphi]->Fill(mixer.mix_tree->mass[m]);
+              hmass_sdbd_scaled[idphi]->Fill(mixer.mix_tree->mass[m],scale_primary*scale_associate);
             }
         }
     }
