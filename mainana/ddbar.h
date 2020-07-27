@@ -51,6 +51,7 @@ namespace ddbar
     float centmax() { return fcentmax; }
     std::string texpt1();
     std::string texpt2();
+    std::string texpt();
     std::string texyd() { return Form("|y^{D}| < %s", xjjc::number_remove_zero(fyd).c_str()); }
     std::string texcent() { return Form("Centrality %.0f-%.0f%s", fcentmin, fcentmax, "%"); }
     void drawlabel(float xx, float yy);
@@ -148,6 +149,17 @@ std::string ddbar::kinematics::texpt2()
 {
   std::string tt(Form("%s < p_{T}^{asso D} < %s GeV/c", xjjc::number_remove_zero(fpt2min).c_str(), xjjc::number_remove_zero(fpt2max).c_str()));
   if(infpt2()) tt = Form("p_{T}^{asso D} > %s GeV/c", xjjc::number_remove_zero(fpt2min).c_str());
+  return tt;
+}
+
+/* Format the pT range for D when the same range is used for both D's */
+std::string ddbar::kinematics::texpt() {
+  std::string tt(Form("%s < p_{T}^{D} < %s GeV/c",
+                      xjjc::number_remove_zero(fpt1min).c_str(),
+                      xjjc::number_remove_zero(fpt1max).c_str()));
+  if (infpt1())
+    tt = Form("p_{T}^{D} > %s GeV/c",
+              xjjc::number_remove_zero(fpt1min).c_str());
   return tt;
 }
 
