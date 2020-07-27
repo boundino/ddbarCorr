@@ -173,7 +173,7 @@ ddtree::mvas::mvas(std::string inputname, std::string name)
 bool ddtree::mvas::passmva(float pt, float mva)
 {
   int j=-1;
-  for(int i=0; i<fbounds.size()-1; i++)
+  for(unsigned i=0; i<fbounds.size()-1; i++)
     {
       if(pt < fbounds[i]) break;
       j++;
