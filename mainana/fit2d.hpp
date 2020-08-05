@@ -72,6 +72,11 @@ namespace xjjroot
         TString collisionsyst = "", TString outputname = "cmass",
         const std::vector<TString> &vtex = std::vector<TString>());
 
+    RooFitResult *
+    simfit(TTree *sigtree, TTree *swaptree, const int iBin,
+        TString collisionsyst = "", TString outputname = "cmass",
+        const std::vector<TString> &vtex = std::vector<TString>());
+
     Double_t GetS() const {return S;}
     Double_t GetB() const {return B;}
     Double_t GetSig() const {return Sig;}

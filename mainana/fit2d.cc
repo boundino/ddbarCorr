@@ -1,4 +1,9 @@
 #include "fit2d.hpp"
+#include "RooCategory.h"
+#include "TTreeReader.h"
+#include "TTreeReaderValue.h"
+#include "RooSimultaneous.h"
+#include "TFile.h"
 
 using namespace RooFit;
 
@@ -263,6 +268,257 @@ RooFitResult* xjjroot::fit2d::fit(
   return r_ml_wgt_corr;
 }
 
+/*
+  Do an unbinned extended simultaneous ML fit on D0 mass in a certain dphi bin
+  Calculate the signal yield and error
+  @param sigtree    TTree*  tree containing data
+  @param swaptree   TTree*  tree containing D0 mass and weight from swapped K pi
+  @param isSig   int     1:signal 0:sideband
+  @param iBin    int     ID of delta phi bin
+*/
+RooFitResult* xjjroot::fit2d::simfit(
+    TTree* sigtree, TTree* swaptree, const int iBin,
+    TString collisionsyst /*=""*/, TString outputname /*="cmass"*/,
+    const std::vector<TString> &vtex /*=std::vector<TString>()*/) {
+  reset();
+  init();
+
+  RooMsgService::instance().getStream(1).removeTopic(Integration);
+  RooMsgService::instance().getStream(1).removeTopic(Plotting);
+  // RooMsgService::instance().getStream(1).removeTopic(Minimization);
+
+  TString fitoption = ffitverbose ? "L m" : "L m q";
+  setgstyle();
+
+  const Double_t min_fit_dzero = 1.73;
+  // Declare an observable for D0 mass
+  RooRealVar m1("m1", "m_{#pi K}^{1} / GeV", min_fit_dzero, max_hist_dzero);
+  // RooRealVar m2("m2", "m_{#pi K}^{2} / GeV", min_fit_dzero, max_hist_dzero);
+
+  // weight of the D0 mass
+  RooRealVar w("weight", "weight", min_weight, max_weight);
+
+  // set range for D0 mass
+  m1.setRange("D0range", min_fit_dzero, max_hist_dzero);
+  // m2.setRange("D0range", min_fit_dzero, max_hist_dzero);
+
+  RooRealVar iPhi("iPhi", "dphi bin ID", 0, 20);
+  RooRealVar werr("weightErr", "error of weight", min_weight, max_weight);
+
+  // Define category to distinguish trigger and associate samples events
+  RooCategory sample("sample", "sample");
+  sample.defineType("trig");
+  sample.defineType("asso");
+
+  // tree containing associate D
+  TFile ftmp("tmp.root", "recreate");
+  TTree asso("ass", "ass");
+  TTreeReader reader(sigtree);
+  TTreeReaderValue<Float_t> sigmass(reader, "m2");
+  TTreeReaderValue<Int_t> sigiphi(reader, "iPhi");
+  Float_t smass;
+  asso.Branch("m1", &smass, "m1/F");
+  while (reader.Next()) {
+    if (*sigiphi != iBin) continue;
+    smass = *sigmass;
+    asso.Fill();
+  }
+
+  // Construct unbinned dataset importing tree branches mass matching
+  // between branches and RooRealVars
+  // Select the dphi bin in question
+  RooDataSet ds("ds", "ds", RooArgSet(m1, iPhi),
+                Cut(TString::Format("iPhi == %i", iBin)), Import(*sigtree));
+
+  RooDataSet ds_asso("dsasso", "dsasso", RooArgSet(m1), Import(asso));
+
+  RooDataSet swapds("swapds", "swapped dataset", RooArgSet(m1), Import(*swaptree));
+
+  // Construct combined dataset in (x,sample)
+  RooDataSet combData("combData", "combined data", m1, Index(sample),
+                      Import("trig", ds), Import("asso", ds_asso));
+
+  // Double gaussian as signal p.d.f.
+  // Fix the mean at D0 mass
+  RooRealVar mean("mean", "mean of gaussians", mass_dzero, mass_dzero - 0.01, mass_dzero + 0.01);
+  mean.setConstant(true);
+  RooRealVar sigma1x("sigma1x", "width of gaussians", 0.02, 0.005, 0.04);
+  RooRealVar sigma2x("sigma2x", "width of gaussians", 0.005, 0.001, 0.02);
+  RooGaussian sig1x("sig1x", "Signal component 1", m1, mean, sigma1x);
+  RooGaussian sig2x("sig2x", "Signal component 2", m1, mean, sigma2x);
+  // Sum the signal components into a composite signal p.d.f.
+  RooRealVar sigfracx("sigfracx", "fraction of component 1 in signal", 0.5, 0.001, 0.999);
+  RooAddPdf sigx("sigx", "Signal", RooArgList(sig1x, sig2x), sigfracx);
+
+  RooRealVar sigma1y("sigma1y", "width of gaussians", 0.02, 0.005, 0.04);
+  RooRealVar sigma2y("sigma2y", "width of gaussians", 0.005, 0.001, 0.02);
+  RooGaussian sig1y("sig1y", "Signal component 1", m1, mean, sigma1y);
+  RooGaussian sig2y("sig2y", "Signal component 2", m1, mean, sigma2y);
+  // Sum the signal components into a composite signal p.d.f.
+  RooRealVar sigfracy("sigfracy", "fraction of component 1 in signal", 0.5, 0.001, 0.999);
+  RooAddPdf sigy("sigy", "Signal", RooArgList(sig1y, sig2y), sigfracy);
+
+  // Build 3rd-order Chebychev polynomial p.d.f. as combinatorial background
+  RooRealVar a1("a1", "a1", -0.2, -.8, .8);
+  RooRealVar a2("a2", "a2", 0.02, -.1, .1);
+  RooRealVar a3("a3", "a3", 0.0, -.1, .1);
+  RooChebychev bkgx("bkgx", "Background", m1, RooArgSet(a1, a2, a3));
+
+  RooRealVar b1("b1", "b1", -0.2, -.8, .8);
+  RooRealVar b2("b2", "b2", 0.02, -.1, .1);
+  RooRealVar b3("b3", "b3", 0.0, -.1, .1);
+  RooChebychev bkgy("bkgy", "Background", m1, RooArgSet(b1, b2, b3));
+
+  // 2-Gaussian as swapped K pi mass
+  RooRealVar sigmas1x("sigmas1x", "width of swapped mass", 0.1, 0.05, 2);
+  RooRealVar sigmas2x("sigmas2x", "width of swapped mass", 0.02, 0.01, 0.1);
+  RooGaussian swapped1x("swapped1x", "swapped k pi mass", m1, mean, sigmas1x);
+  RooGaussian swapped2x("swapped2x", "swapped k pi mass", m1, mean, sigmas2x);
+  RooRealVar swpfracx("swpfracx", "fraction of component 1 in swapped", 0.5, 0.001, 0.999);
+  RooAddPdf swappedx("swappedx", "swp", RooArgList(swapped1x, swapped2x), swpfracx);
+
+  RooRealVar sigmas1y("sigmas1y", "width of swapped mass", 0.1, 0.05, 2);
+  RooRealVar sigmas2y("sigmas2y", "width of swapped mass", 0.02, 0.01, 0.1);
+  RooGaussian swapped1y("swapped1y", "swapped k pi mass", m1, mean, sigmas1y);
+  RooGaussian swapped2y("swapped2y", "swapped k pi mass", m1, mean, sigmas2y);
+  RooRealVar swpfracy("swpfracy", "fraction of component 1 in swapped", 0.5, 0.001, 0.999);
+  RooAddPdf swappedy("swappedy", "swp", RooArgList(swapped1y, swapped2y), swpfracy);
+
+  swappedx.fitTo(swapds, Save());
+  RooPlot *frame2 = m1.frame(Title("swapped_plot"), Bins(30));
+  swapds.plotOn(frame2);
+  swappedx.plotOn(frame2);
+
+  sigmas1x.setConstant(true);
+  sigmas2x.setConstant(true);
+  swpfracx.setConstant(true);
+
+  // RooRealVar rsigswap("rsigswap", "coeff of signal", 1. / 3.);
+  // RooAddPdf sig("sig", "Signal", RooArgList(sigx, swapped), rsigswap);
+
+  const long num_max = ds.sumEntries("", "D0range");
+
+  // Initially, Nsig is set to 3% of the total entries, and Nswap = Nsig.
+  RooRealVar nss("nss", "number of signal entries",
+                  0.03 * num_max, 0.001 * num_max, 0.1 * num_max);
+  RooRealVar nbb("nbb", "number of background entries",
+                 0.95 * num_max, 0.6 * num_max, 1.1 * num_max);
+  RooRealVar nsb("nsb", "number of background entries", 0.03 * num_max,
+                 0.001 * num_max, 0.1 * num_max);
+  RooRealVar nbs("nbs", "number of background entries", 0.03 * num_max,
+                 0.001 * num_max, 0.1 * num_max);
+  // RooRealVar nsw("nsw", "number of swapped entries", 0.06 * num_max,
+  //                 0.01 * num_max, 0.2 * num_max);
+  // RooRealVar nws("nws", "number of swapped entries", 0.06 * num_max,
+  //                0.01 * num_max, 0.2 * num_max);
+
+  //
+  RooAddPdf modelx("modelx", "composite pdf", RooArgList(sigx, bkgx, sigx, bkgx), RooArgList(nss, nbb, nsb, nbs));
+  // RooAddPdf modely("modely", "composite pdf", RooArgList(sigy, bkgy, bkgy, sigy), RooArgList(nss, nbb, nsb, nbs));
+  RooAddPdf modely("modely", "composite pdf", RooArgList(sigx, bkgx, bkgx, sigx), RooArgList(nss, nbb, nsb, nbs));
+
+  // Construct a simultaneous pdf using category sample as index
+  RooSimultaneous simPdf("simPdf", "simultaneous pdf", sample);
+
+  // Associate model with the physics state and model_ctl with the control state
+  simPdf.addPdf(modelx, "trig");
+  simPdf.addPdf(modely, "asso");
+
+  // U n b i n n e d   M L   f i t
+  // Extended to get Nsig directly
+  RooFitResult *r_ml_wgt_corr =
+      simPdf.fitTo(combData, Save(), Extended(kTRUE), NumCPU(10));
+
+  r_ml_wgt_corr->Print();
+
+  // Calculate yields and error
+  yield = nss.getValV();
+  yieldErr = nss.getError();
+  // yieldErr = nsig.getAsymErrorHi();
+
+  // Plot the result
+  auto canv = new TCanvas("Canvas", "Canvas", 800, 600);
+  frame2->Draw();
+  canv->SaveAs(outputname + "_swapfit" +".pdf");
+
+  std::vector<TString> dim = {"trig", "asso"};
+
+  for (auto m : dim) {
+    TString name = m;
+    RooPlot *plot = m1.frame(Title(name + "_plot"), Bins(60));
+    combData.plotOn(plot, Name("pdat" + name), Cut("sample==sample::" + name));
+    simPdf.plotOn(plot, Slice(sample, m), ProjWData(sample, combData),
+                  VisualizeError(*r_ml_wgt_corr));
+    combData.plotOn(plot, Name("pdat" + name), Cut("sample==sample::" + name),
+              DataError(RooAbsData::SumW2));
+    simPdf.plotOn(plot, Name("pfit" + name),
+                  Slice(sample, m), ProjWData(sample, combData));
+    simPdf.plotOn(plot, Name("psig" + name), Slice(sample, m),
+                  ProjWData(sample, combData), Components(sigx),
+                 DrawOption("LF"), FillStyle(3002), FillColor(kOrange - 3),
+                 LineStyle(2), LineColor(kOrange - 3));
+    simPdf.plotOn(plot, Name("pbkg" + name), Slice(sample, m),
+                  ProjWData(sample, combData), Components(bkgx),
+                 LineStyle(2), LineColor(4));
+    // simPdf.plotOn(plot, Name("pswp" + name), Components(swapped),
+    //               Slice(sample, m), ProjWData(sample, combData),
+    //               DrawOption("LF"), FillStyle(3005), FillColor(kGreen + 4),
+    //               LineStyle(1), LineColor(kGreen + 4));
+    plot->Draw();
+
+    TLegend *leg = new TLegend(0.69, 0.18, 0.89, 0.48, NULL, "brNDC");
+    leg->SetBorderSize(0);
+    leg->SetFillStyle(0);
+    leg->SetTextFont(42);
+    leg->SetTextSize(0.04);
+
+    leg->AddEntry("pdat" + name, "Data", "pl");
+    leg->AddEntry("pfit" + name, "Fit", "l");
+    leg->AddEntry("psig" + name, "D^{0}+#bar{D^{#lower[0.2]{0}}} Signal", "f");
+    // leg->AddEntry("pswp" + name, "K-#pi swapped", "f");
+    leg->AddEntry("pbkg" + name, "Combinatorial", "l");
+
+    leg->Draw("same");
+
+    drawCMS(collisionsyst);
+
+    TString other = (name == m1.GetName()) ? "D" : "#bar{D}";
+    Float_t texxpos = 0.22, texypos = 0.55, texdypos = 0.053;
+    if (!vtex.empty()) {
+      texypos += texlinespc;
+      for (std::vector<TString>::const_iterator it = vtex.begin();
+           it != vtex.end(); it++)
+        drawtex(texxpos, texypos = (texypos - texdypos - texlinespc), *it);
+    }
+    // drawtex(texxpos, texypos = (texypos - texdypos),
+    //         Form("(%.3f < m_{%s} < %.3f)", mass_dzero_signal_l, other.Data(),
+    //              mass_dzero_signal_h));
+    if (fdrawyield) {
+      drawtex(texxpos, texypos = (texypos - texdypos),
+              Form("N = %.0f #pm %.0f", yield, yieldErr));
+    }
+
+    if (fsaveplot) {
+      canv->SaveAs(Form("%s_" + name + ".pdf", outputname.Data()));
+    }
+  }
+
+  gStyle->SetPadLeftMargin(0.18);
+  gStyle->SetPadRightMargin(0.18);
+  auto canv2d = new TCanvas("Canvas2D", "Canvas", 800, 600);
+  int nbins = 27;
+  double mass_low = 1.73;
+  double mass_upp = 2.0;
+  TString ddname = Form("dd%d", iBin);
+  TH2D *dd = new TH2D(ddname, "mass; m_{D}; m_{#bar{D}}", nbins, mass_low,
+                      mass_upp, nbins, mass_low, mass_upp);
+  sigtree->Draw("m2:m1 >> " + ddname, Form("iPhi == %d", iBin));
+  dd->Draw("colorz");
+  TString dir = outputname(0, outputname.Length() - 3);
+  canv2d->SaveAs(Form("%s" + ddname + ".pdf", dir.Data()));
+
+  return r_ml_wgt_corr;
+}
 void xjjroot::fit2d::reset()
 {
   clearvar();

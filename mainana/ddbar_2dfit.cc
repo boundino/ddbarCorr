@@ -55,7 +55,7 @@ void ddbar_fithist(std::string inputname, std::string swapname, std::string outp
   // for(int k=0; k<2; k++)
     {
       label.push_back(Form("%s < #Delta#phi/#pi < %s", xjjc::number_remove_zero(binfo->phibin()[k]).c_str(), xjjc::number_remove_zero(binfo->phibin()[k+1]).c_str()));
-      auto result = fitter->fit(tmass, swapmass, k, "PbPb", Form("%s/idx/c%02d", outputname.c_str(), k), label);
+      auto result = fitter->simfit(tmass, swapmass, k, "PbPb", Form("%s/idx/c%02d", outputname.c_str(), k), label);
       status.push_back(*result);
 
       hdphi_sub->SetBinContent(k + 1, fitter->GetY());
