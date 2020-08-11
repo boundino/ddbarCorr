@@ -5,6 +5,7 @@
 #include "RooSimultaneous.h"
 #include "TFile.h"
 
+#include <numeric>
 using namespace RooFit;
 
 void xjjroot::fit2d::resolveoption()
@@ -304,6 +305,8 @@ RooFitResult* xjjroot::fit2d::simfit(
 
   RooRealVar iPhi("iPhi", "dphi bin ID", 0, 20);
   RooRealVar werr("weightErr", "error of weight", min_weight, max_weight);
+  RooRealVar isSwap1("isSwap1", "whether m1 is swapped", 0, 1);
+  RooRealVar isSwap2("isSwap2", "whether m2 is swapped", 0, 1);
 
   // Define category to distinguish trigger and associate samples events
   RooCategory sample("sample", "sample");
@@ -332,7 +335,8 @@ RooFitResult* xjjroot::fit2d::simfit(
 
   RooDataSet ds_asso("dsasso", "dsasso", RooArgSet(m1), Import(asso));
 
-  RooDataSet swapds("swapds", "swapped dataset", RooArgSet(m1), Import(*swaptree));
+  RooDataSet swapds("swapds", "swapped dataset", RooArgSet(m1, isSwap1),
+                    Cut(TString::Format("isSwap1")), Import(*swaptree));
 
   // Construct combined dataset in (x,sample)
   RooDataSet combData("combData", "combined data", m1, Index(sample),
@@ -371,27 +375,27 @@ RooFitResult* xjjroot::fit2d::simfit(
 
   // 2-Gaussian as swapped K pi mass
   RooRealVar sigmas1x("sigmas1x", "width of swapped mass", 0.1, 0.05, 2);
-  RooRealVar sigmas2x("sigmas2x", "width of swapped mass", 0.02, 0.01, 0.1);
-  RooGaussian swapped1x("swapped1x", "swapped k pi mass", m1, mean, sigmas1x);
-  RooGaussian swapped2x("swapped2x", "swapped k pi mass", m1, mean, sigmas2x);
-  RooRealVar swpfracx("swpfracx", "fraction of component 1 in swapped", 0.5, 0.001, 0.999);
-  RooAddPdf swappedx("swappedx", "swp", RooArgList(swapped1x, swapped2x), swpfracx);
+  // RooRealVar sigmas2x("sigmas2x", "width of swapped mass", 0.02, 0.01, 0.1);
+  // RooGaussian swapped1x("swapped1x", "swapped k pi mass", m1, mean, sigmas1x);
+  // RooGaussian swapped2x("swapped2x", "swapped k pi mass", m1, mean, sigmas2x);
+  // RooRealVar swpfracx("swpfracx", "fraction of component 1 in swapped", 0.5, 0.001, 0.999);
+  // RooAddPdf swappedx("swappedx", "swp", RooArgList(swapped1x, swapped2x), swpfracx);
 
-  RooRealVar sigmas1y("sigmas1y", "width of swapped mass", 0.1, 0.05, 2);
-  RooRealVar sigmas2y("sigmas2y", "width of swapped mass", 0.02, 0.01, 0.1);
-  RooGaussian swapped1y("swapped1y", "swapped k pi mass", m1, mean, sigmas1y);
-  RooGaussian swapped2y("swapped2y", "swapped k pi mass", m1, mean, sigmas2y);
-  RooRealVar swpfracy("swpfracy", "fraction of component 1 in swapped", 0.5, 0.001, 0.999);
-  RooAddPdf swappedy("swappedy", "swp", RooArgList(swapped1y, swapped2y), swpfracy);
+  // RooRealVar sigmas1y("sigmas1y", "width of swapped mass", 0.1, 0.05, 2);
+  // RooRealVar sigmas2y("sigmas2y", "width of swapped mass", 0.02, 0.01, 0.1);
+  // RooGaussian swapped1y("swapped1y", "swapped k pi mass", m1, mean, sigmas1y);
+  // RooGaussian swapped2y("swapped2y", "swapped k pi mass", m1, mean, sigmas2y);
+  // RooRealVar swpfracy("swpfracy", "fraction of component 1 in swapped", 0.5, 0.001, 0.999);
+  // RooAddPdf swappedy("swappedy", "swp", RooArgList(swapped1y, swapped2y), swpfracy);
 
-  swappedx.fitTo(swapds, Save());
+  RooGaussian swp("swp", "swapped k pi mass", m1, mean, sigmas1x);
+
+  swp.fitTo(swapds, Save());
   RooPlot *frame2 = m1.frame(Title("swapped_plot"), Bins(30));
   swapds.plotOn(frame2);
-  swappedx.plotOn(frame2);
+  swp.plotOn(frame2);
 
   sigmas1x.setConstant(true);
-  sigmas2x.setConstant(true);
-  swpfracx.setConstant(true);
 
   // RooRealVar rsigswap("rsigswap", "coeff of signal", 1. / 3.);
   // RooAddPdf sig("sig", "Signal", RooArgList(sigx, swapped), rsigswap);
@@ -399,23 +403,32 @@ RooFitResult* xjjroot::fit2d::simfit(
   const long num_max = ds.sumEntries("", "D0range");
 
   // Initially, Nsig is set to 3% of the total entries, and Nswap = Nsig.
-  RooRealVar nss("nss", "number of signal entries",
-                  0.03 * num_max, 0.001 * num_max, 0.1 * num_max);
-  RooRealVar nbb("nbb", "number of background entries",
-                 0.95 * num_max, 0.6 * num_max, 1.1 * num_max);
-  RooRealVar nsb("nsb", "number of background entries", 0.03 * num_max,
-                 0.001 * num_max, 0.1 * num_max);
-  RooRealVar nbs("nbs", "number of background entries", 0.03 * num_max,
-                 0.001 * num_max, 0.1 * num_max);
-  // RooRealVar nsw("nsw", "number of swapped entries", 0.06 * num_max,
-  //                 0.01 * num_max, 0.2 * num_max);
-  // RooRealVar nws("nws", "number of swapped entries", 0.06 * num_max,
-  //                0.01 * num_max, 0.2 * num_max);
+  RooRealVar nss("nss", "number of signal-signal entries",
+                 0.02 * num_max, 0.001 * num_max, 0.1 * num_max);
+  RooRealVar nbb("nbb", "number of bg-bg entries",
+                 0.92 * num_max, 0.700 * num_max, 1.1 * num_max);
+  RooRealVar nww("nww", "number of swap-swap entries",
+                 0.02 * num_max, 0.001 * num_max, 0.1 * num_max);
+  RooRealVar nsb("nsb", "number of signal-bg entries",
+                 0.02 * num_max, 0.001 * num_max, 0.1 * num_max);
+  RooRealVar nbs("nbs", "number of bg-signal entries",
+                 0.02 * num_max, 0.001 * num_max, 0.1 * num_max);
+  RooRealVar nsw("nsw", "number of signal-swap entries",
+                 0.01 * num_max, 0.001 * num_max, 0.1 * num_max);
+  RooRealVar nws("nws", "number of swap-signal entries",
+                 0.01 * num_max, 0.001 * num_max, 0.1 * num_max);
+  RooRealVar nbw("nbw", "number of bg-swap entries",
+                 0.01 * num_max, 0.001 * num_max, 0.1 * num_max);
+  RooRealVar nwb("nwb", "number of swap-bg entries",
+                 0.01 * num_max, 0.001 * num_max, 0.1 * num_max);
+  RooArgList nums(nss, nbb, nww, nsb, nbs, nsw, nws, nbw, nwb, "nums");
 
-  //
-  RooAddPdf modelx("modelx", "composite pdf", RooArgList(sigx, bkgx, sigx, bkgx), RooArgList(nss, nbb, nsb, nbs));
-  // RooAddPdf modely("modely", "composite pdf", RooArgList(sigy, bkgy, bkgy, sigy), RooArgList(nss, nbb, nsb, nbs));
-  RooAddPdf modely("modely", "composite pdf", RooArgList(sigx, bkgx, bkgx, sigx), RooArgList(nss, nbb, nsb, nbs));
+  // Model for D0
+  RooAddPdf modelx("modelx", "composite pdf",
+      RooArgList(sigx, bkgx, swp, sigx, bkgx, sigx, swp, bkgx, swp), nums);
+  // Model for D0bar
+  RooAddPdf modely("modely", "composite pdf",
+      RooArgList(sigx, bkgx, swp, bkgx, sigx, swp, sigx, swp, bkgx), nums);
 
   // Construct a simultaneous pdf using category sample as index
   RooSimultaneous simPdf("simPdf", "simultaneous pdf", sample);
@@ -427,7 +440,7 @@ RooFitResult* xjjroot::fit2d::simfit(
   // U n b i n n e d   M L   f i t
   // Extended to get Nsig directly
   RooFitResult *r_ml_wgt_corr =
-      simPdf.fitTo(combData, Save(), Extended(kTRUE), NumCPU(10));
+      simPdf.fitTo(combData, Save(), Extended(kTRUE), NumCPU(14));
 
   r_ml_wgt_corr->Print();
 
@@ -435,6 +448,17 @@ RooFitResult* xjjroot::fit2d::simfit(
   yield = nss.getValV();
   yieldErr = nss.getError();
   // yieldErr = nsig.getAsymErrorHi();
+
+  std::vector<RooRealVar> nlist = { nss, nbb, nww, nsb, nbs, nsw, nws, nbw, nwb };
+
+  int total = 0;
+  for (auto& i : nlist) {
+    i.printValue(std::cout);
+    std::cout << ", " << i.getValV() / num_max << "\n";
+    total += i.getValV();
+  }
+  std::cout << "total: " << num_max << ", sum: " << total << ", ratio: " << total / num_max  << "\n";
+
 
   // Plot the result
   auto canv = new TCanvas("Canvas", "Canvas", 800, 600);
@@ -460,10 +484,10 @@ RooFitResult* xjjroot::fit2d::simfit(
     simPdf.plotOn(plot, Name("pbkg" + name), Slice(sample, m),
                   ProjWData(sample, combData), Components(bkgx),
                  LineStyle(2), LineColor(4));
-    // simPdf.plotOn(plot, Name("pswp" + name), Components(swapped),
-    //               Slice(sample, m), ProjWData(sample, combData),
-    //               DrawOption("LF"), FillStyle(3005), FillColor(kGreen + 4),
-    //               LineStyle(1), LineColor(kGreen + 4));
+    simPdf.plotOn(plot, Name("pswp" + name), Slice(sample, m),
+                  ProjWData(sample, combData), Components(swp), LineStyle(1),
+                  DrawOption("LF"), FillStyle(3005), FillColor(kGreen + 4),
+                  LineColor(kGreen + 4));
     plot->Draw();
 
     TLegend *leg = new TLegend(0.69, 0.18, 0.89, 0.48, NULL, "brNDC");
@@ -475,7 +499,7 @@ RooFitResult* xjjroot::fit2d::simfit(
     leg->AddEntry("pdat" + name, "Data", "pl");
     leg->AddEntry("pfit" + name, "Fit", "l");
     leg->AddEntry("psig" + name, "D^{0}+#bar{D^{#lower[0.2]{0}}} Signal", "f");
-    // leg->AddEntry("pswp" + name, "K-#pi swapped", "f");
+    leg->AddEntry("pswp" + name, "K-#pi swapped", "f");
     leg->AddEntry("pbkg" + name, "Combinatorial", "l");
 
     leg->Draw("same");
