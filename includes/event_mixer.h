@@ -1,100 +1,151 @@
-#ifndef EVENTMIXER_H
-#define EVENTMIXER_H
-
 #include "TTree.h"
 #include "dtree.h"
+
 #include "xjjcuti.h"
 
-#include <iostream>
-#include <random>
 #include <vector>
+#include <string>
+#include <iostream>
 
 class EventMixer
 {
-public:
-  EventMixer(TTree* t, int hiBin_width = 1, float vz_width = 0.5, float vz_min =-30., float vz_max=30.);
-  EventMixer(ddtree::dtree* t, int hiBin_width = 1, float vz_width = 0.1, float vz_min=-30.,float vz_max=30.);
-  size_t findSimilarEvent(int hiBin, float vz, size_t original_entry);
-  ddtree::dtree* mix_tree;
-private:
-  void em_init(int hiBin_width, float vz_width, float vz_min, float vz_max);
-  int _hiBin_width;
-  float _vz_width;
-  float _vz_min;
-  float _vz_max;
-  std::default_random_engine r;
-  std::vector<std::vector<std::vector<size_t>>> similarEvents;
-  std::vector<std::vector<std::uniform_int_distribution<int>>> seDists;
+  public:
+  EventMixer(ddtree::dtree* t, int hiBin_width=10, float vz_width=10., float vz_min=-30., float vz_max=30.);
+  ~EventMixer();
+  //EventMixer(std::string filename = "mixedTrees.root");
+  //void SaveToFile(std::string filename = "mixedTrees.root");
+  //void LoadFromFile(std::string filename = "mixedTrees.root");
+  void buildTreeBins(ddtree::dtree* t);
+  ddtree::dtree* findSimilarEvent(int hiBin, float vz, size_t original_evt);
+  private:
+  TFile* f;
+  Int_t _hiBin_width;
+  Float_t _vz_width;
+  Float_t _vz_min;
+  Float_t _vz_max;
+  std::vector<std::vector<ddtree::dtree*>> dtreeBins;
+  std::vector<std::vector<TTree*>> trees;
+  std::vector<std::vector<std::vector<size_t>>> entrylists;
+  std::vector<std::vector<int>> cursors;
 };
-
-EventMixer::EventMixer(TTree* t, int hiBin_width, float vz_width, float vz_min, float vz_max)
-{
-  mix_tree = new ddtree::dtree(t);
-  em_init(hiBin_width,vz_width,vz_min,vz_max);
-}
 
 EventMixer::EventMixer(ddtree::dtree* t, int hiBin_width, float vz_width, float vz_min, float vz_max)
 {
-  mix_tree = t;
-  em_init(hiBin_width,vz_width,vz_min,vz_max);
-}
-
-void EventMixer::em_init(int hiBin_width, float vz_width, float vz_min, float vz_max)
-{
+  f = new TFile("/data/mjpeters/mixTrees.root","recreate");
   _hiBin_width = hiBin_width;
   _vz_width = vz_width;
   _vz_min = vz_min;
   _vz_max = vz_max;
-  int nHiBins = ceil(200./hiBin_width);
-  int nVzBins = ceil((vz_max-vz_min)/vz_width);
-  std::cout << "nHiBins: " << nHiBins << "\n";
-  std::cout << "nVzBins: " << nVzBins << "\n";
-  similarEvents.resize(nHiBins);
-  seDists.resize(nHiBins);
-  for(int i=0;i<nHiBins;i++)
+  buildTreeBins(t);
+}
+
+EventMixer::~EventMixer()
+{
+  f->Close();
+  delete f;
+}
+/*
+EventMixer::EventMixer(std::string filename)
+{
+  LoadFromFile(filename);
+}
+
+void EventMixer::LoadFromFile(std::string filename)
+{
+  TFile* f = TFile::Open(filename.c_str());
+  _hiBin_width = (int)f->Get("hiBin_width");
+  _vz_width = (float)f->Get("vz_width");
+  _vz_min = (float)f->Get("vz_min");
+  _vz_max = (float)f->Get("vz_max");
+  dtreeBins = (std::vector<std::vector<ddtree::dtree*>>)f->Get("dtreeBins");
+  trees = (std::vector<std::vector<TTree*>>)f->Get("trees");
+  entrylists = (std::vector<std::vector<std::vector<size_t>>>)f->Get("entrylists");
+  cursors = (std::vector<std::vector<int>>)f->Get("cursors");
+}
+
+void EventMixer::SaveToFile(std::string filename)
+{
+  TFile* f = new TFile(filename.c_str());
+  _hiBin_width.Write();
+  _vz_width.Write();
+  _vz_min.Write();
+  _vz_max.Write();
+  dtreeBins.Write();
+  trees.Write();
+  entrylists.Write();
+  cursors.Write();
+}
+*/
+
+void EventMixer::buildTreeBins(ddtree::dtree* t)
+{
+  // setup 2D vectors of TTrees and dtrees
+  dtreeBins.clear();
+  int nhiBins = 200/_hiBin_width;
+  int nvzBins = ceil((_vz_max-_vz_min)/_vz_width);
+  trees.resize(nhiBins);
+  dtreeBins.resize(nhiBins);
+  entrylists.resize(nhiBins);
+  cursors.resize(nhiBins);
+  for(int i=0;i<nhiBins;i++)
   {
-    similarEvents[i].resize(nVzBins);
-    seDists[i].resize(nVzBins);
+    dtreeBins[i].resize(nvzBins);
+    trees[i].resize(nvzBins);
+    entrylists[i].resize(nvzBins);
+    cursors[i].resize(nvzBins);
   }
-  size_t nevents = mix_tree->nt()->GetEntries();
-  std::cout << "Filling event mixing lookup table...\n";
-  for(size_t i=0;i<nevents;i++)
+
+  // copy structure for all TTrees, and initialize cursors
+  for(int i=0;i<nhiBins;i++)
   {
-    if(i%10000==0) xjjc::progressbar(i,nevents);
-    mix_tree->nt()->GetEntry(i);
-    if(mix_tree->bestvtxZ < vz_min || mix_tree->bestvtxZ > vz_max) continue;
-    int cbin = mix_tree->centrality / hiBin_width;
-    int vzbin = floor((mix_tree->bestvtxZ - vz_min) / vz_width);
-    similarEvents[cbin][vzbin].push_back(i);
-  }
-  std::cout << "done.\n";
-  std::cout << "Initializing event mixing random engine...\n";
-  for(int c=0;c<nHiBins;c++)
-  {
-    for(int z=0;z<nVzBins;z++)
+    for(int j=0;j<nvzBins;j++)
     {
-      if(similarEvents[c][z].size() != 0)
-      {
-        seDists[c][z] = std::uniform_int_distribution<int>(0,similarEvents[c][z].size()-1);
-      }
+      trees[i][j] = t->nt()->CloneTree(0);
+      std::string tname = t->nt()->GetName();
+      trees[i][j]->SetName((tname+std::to_string(i)+"_"+std::to_string(j)).c_str());
+      cursors[i][j] = 1;
     }
   }
-  std::cout << "done.\n";
-}
 
-size_t EventMixer::findSimilarEvent(int hiBin, float vz, size_t original_entry)
-{
-  int cbin = hiBin / _hiBin_width;
-  int vzbin = floor((vz - _vz_min) / _vz_width);
-  if(similarEvents[cbin][vzbin].size() <= 1) return -1;
-  size_t evt = original_entry;
-  do
+  // loop over original TTree, fill appropriate TTree
+  size_t nentries = 100000;//t->nt()->GetEntries();
+  std::cout << "Building event-mixing TTrees...\n";
+  for(size_t evt=0;evt<nentries;evt++)
   {
-    int rand_choice = seDists[cbin][vzbin](r);
-    evt = similarEvents[cbin][vzbin][rand_choice];
-  } while(evt == original_entry);
-  mix_tree->nt()->GetEntry(evt);
-  return evt;
+    if(evt % 10000 == 0) xjjc::progressbar(evt,nentries);
+    t->nt()->GetEntry(evt);
+    int hiBin_index = floor(t->centrality/_hiBin_width);
+    int vz_index = floor((t->bestvtxZ-_vz_min)/_vz_width);
+    trees[hiBin_index][vz_index]->Fill();
+    entrylists[hiBin_index][vz_index].push_back(evt);
+  }
+  
+  // make dtrees out of the TTrees
+  for(int i=0;i<nhiBins;i++)
+  {
+    for(int j=0;j<nvzBins;j++)
+    {
+      dtreeBins[i][j] = new ddtree::dtree(f,(t->nt()->GetName()+std::to_string(i)+"_"+std::to_string(j)).c_str());
+    }
+  }
+  f->Write();
 }
 
-#endif
+ddtree::dtree* EventMixer::findSimilarEvent(int hiBin, float vz, size_t originalentry)
+{
+  int nhiBins = ceil(200/_hiBin_width);
+  int nvzBins = ceil((_vz_max-_vz_min)/_vz_width);
+  int hiBin_index = floor(hiBin/_hiBin_width);
+  int vz_index = floor((vz-_vz_min)/_vz_width);
+  int cursor = cursors[hiBin_index][vz_index];
+  int nentries = dtreeBins[hiBin_index][vz_index]->nt()->GetEntries();
+  if(originalentry == entrylists[hiBin_index][vz_index][cursor])
+  {
+    cursors[hiBin_index][vz_index]++;
+    cursor = cursors[hiBin_index][vz_index];
+  }
+  if(cursor==nentries-1) cursors[hiBin_index][vz_index] = 0;
+  else cursors[hiBin_index][vz_index]++;
+  dtreeBins[hiBin_index][vz_index]->nt()->GetEntry(cursor);
+  return dtreeBins[hiBin_index][vz_index];
+}

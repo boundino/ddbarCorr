@@ -9,7 +9,7 @@ pt2max=( 999 999 999 999 999 999 999 999 999 999)
 dy=(     1 1 1 1 1 1 1 1 1 1)
 cmin=(   0 0 0 0 0 0 0 0 0 0)
 cmax=(   80 80 80 80 80 80 80 80 80 80)
-label=4pi
+label=2pi
 ##
 inputdata=DntupleRun2018/skim_d0ana_PbPb2018_HIMinimumBias.root
 inputmc=rootfiles/masstpl_PbPb.root

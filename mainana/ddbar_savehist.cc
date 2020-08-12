@@ -5,6 +5,8 @@
 
 #include <vector>
 #include <string>
+#include <utility>
+#include <random>
 
 #include "xjjcuti.h"
 #include "xjjrootuti.h"
@@ -57,11 +59,18 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
       eff[i] = (TH2D*) ineff->Get("efficiency_" + centralityString(i));
     }
 
+  std::vector<float> cents = {0, 30, 50, 80};
+  std::vector<ddtree::mvas*> mvacents(cents.size()-1);
+  for(int l=0; l<cents.size()-1; l++)
+    { mvacents[l] = new ddtree::mvas(Form("DntupleRun2018/mvas/BDTCuts_finePtBins_PrompD0_PbPb_cent%.0fto%.0f_trkPt1GeV.root", cents[l], cents[l+1]),
+                                     Form("cent%.0fto%.0f", cents[l], cents[l+1])); }
+
   TFile* infdata = TFile::Open(inputdata.c_str());
   ddtree::dtree* dnt = new ddtree::dtree(infdata, "d0ana/VertexCompositeNtuple");
 
-  std::vector<TH1F*> hmass_incl(binfo->nphibin(), 0), hmass_sdbd(binfo->nphibin(), 0);
-  std::vector<TH1F*> hmass_incl_scaled(binfo->nphibin(), 0), hmass_sdbd_scaled(binfo->nphibin(), 0), hmass_incl_det(binfo->nphibin(), 0);
+  std::vector<TH1F*> hmass_incl(binfo->nphibin(), 0), hmass_sdbd(binfo->nphibin(), 0), hmass_mix(binfo->nphibin());
+  std::vector<TH1F*> hmass_incl_scaled(binfo->nphibin(), 0), hmass_sdbd_scaled(binfo->nphibin(), 0), 
+    hmass_mix_scaled(binfo->nphibin(), 0), hmass_incl_det(binfo->nphibin(), 0);
   TH1F* cent = new TH1F("cent","Centrality",nCentrality,d_centralities.data());
   TH1F* phi = new TH1F("phi", "#phi", 36, -TMath::Pi(), TMath::Pi());
   TH1F* phi_sc = new TH1F("phi_sc", "#phi eff. scaled", 36, -TMath::Pi(), TMath::Pi());
@@ -82,36 +91,47 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
       hmass_incl[k] = new TH1F(Form("hmass_dphi%d_incl", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
       // side-band region
       hmass_sdbd[k] = new TH1F(Form("hmass_dphi%d_sdbd", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
+      hmass_mix[k] = new TH1F(Form("hmass_dphi%d_mix", k), ";m_{K#pi} (GeV/c^{2});Entries",60,dmass_min,dmass_max);
       // scaled mass
       hmass_incl_scaled[k] = new TH1F(Form("hmass_dphi%d_incl_sc", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
       hmass_sdbd_scaled[k] = new TH1F(Form("hmass_dphi%d_sdbd_sc", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
+      hmass_mix_scaled[k] = new TH1F(Form("hmass_dphi%d_mix_sc",k),";m_{K#pi} (GeV/c^{2});Entries",60,dmass_min,dmass_max);
       hmass_incl_det[k] = new TH1F(Form("hmass_phi%d_incl_det", k), ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
     }
   TH1F* hmass_trig = new TH1F("hmass_trig", ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
   TH1F* mc_cent = (TH1F*)ineff->Get("mc_cent");
   
-  int nentries = dnt->nt()->GetEntries();
+  int nentries = 100000;//dnt->nt()->GetEntries();
 
-  EventMixer mixer = EventMixer(dnt);
+  int ntrig = 0;
+  int nass = 0;
+  int ncand = 0;
+  int nmix = 0;
 
+  TFile* infmix = TFile::Open("/data2/mjpeters/d0ana_PbPb2018_HIMinimumBias_0.root");
+  ddtree::dtree* mdt = new ddtree::dtree(infmix,"d0ana/VertexCompositeNtuple");
+  EventMixer mixer = EventMixer(mdt);
+  std::cout << "Done building event mixer.\n";
   for(int i=0; i<nentries; i++)
     {
+      //std::cout << "\ni: " << i << "\n";
       if(i >= event_cutoff) break;
-      if(i%1==0) xjjc::progressbar(i, nentries);
+      if(i%10000==0) xjjc::progressbar(i, nentries);
       dnt->nt()->GetEntry(i);
       if(dnt->centrality > centmax*2 || dnt->centrality < centmin*2) continue;
       cent->Fill(dnt->centrality/2);
       hiBin->Fill(dnt->centrality);
       unsigned centID = centralityID(dnt->centrality);
-      if(mixer.findSimilarEvent(dnt->centrality,dnt->bestvtxZ,i) == -1)
-      {
-        std::cout << "Event mixing failed for entry " << i << "!!!\n";
-        continue;
-      }
-      for(int j=0; j<dnt->candSize; j++)
+      ddtree::dtree* mixtree = mixer.findSimilarEvent(dnt->centrality,dnt->bestvtxZ,i);
+      unsigned mixcentID = centralityID(mixtree->centrality);
+      for(int j=0;j<dnt->candSize;j++)
         {
+          //std::cout << "j: " << j << "\n";
+          //std::cout << "trig pT: " << dnt->pT[j] << "\n";
+          //std::cout << "trig y: " << dnt->y[j] << "\n";
           if(dnt->pT[j] < pt1min || dnt->pT[j] > pt1max) continue;
           if(fabs(dnt->y[j]) > yd) continue;
+          //std::cout << "passed cuts\n";
           hmass_trig->Fill(dnt->mass[j]);
           // int fillid = -1;
           //int isinclusive = 0, issideband = 0;
@@ -133,10 +153,10 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
             dca_incl->Fill(dnt->dca[j], scale);
           //}
           //if(issideband) {
-            y_sdbd->Fill(mixer.mix_tree->y[j], scale);
-            phi_sdbd->Fill(mixer.mix_tree->phi[j], scale);
-            pt_sdbd->Fill(mixer.mix_tree->pT[j], scale);
-            dca_sdbd->Fill(mixer.mix_tree->dca[j], scale);
+          //  y_sdbd->Fill(mixtree->y[j], scale);
+          //  phi_sdbd->Fill(mixtree->phi[j], scale);
+          //  pt_sdbd->Fill(mixtree->pT[j], scale);
+          //  dca_sdbd->Fill(mixtree->dca[j], scale);
           //}
           phipt_sc->Fill(dnt->phi[j], dnt->pT[j], scale);
 
@@ -148,12 +168,20 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
           hmass_incl_det[iphi]->Fill(dnt->mass[j]);
           for(int l=0; l<dnt->candSize; l++)
             {
+              if(j==l) continue;
+              //std::cout << "l: " << l << "\n";
+              
               float associate_pT = dnt->pT[l];
               float associate_y = dnt->y[l];
+              //std::cout << "ass_pt: " << associate_pT << "\n";
+              //std::cout << "ass_y: " << associate_y << "\n";
               if(dnt->pT[l] < pt2min || dnt->pT[l] > pt2max) continue;
               if(fabs(dnt->y[l]) > yd) continue;
-              if(dnt->pT[l] >= dnt->pT[j] || fabs(dnt->pT[l]-dnt->pT[j])<0.0001 || dnt->flavor[l]*dnt->flavor[j] > 0) continue;
-
+              if(dnt->pT[l] >= dnt->pT[j] || 
+                  fabs(dnt->pT[l]-dnt->pT[j])<0.0001 || 
+                  dnt->flavor[l]*dnt->flavor[j] > 0) continue;
+              ntrig++;
+              //std::cout << "passed cuts\n";
               // Calculate the scale factor from MC efficiency
               double scale_primary = 1./eff[centID]->GetBinContent(eff[centID]->FindBin(primary_pT));
               double scale_associate = 1./eff[centID]->GetBinContent(eff[centID]->FindBin(associate_pT));
@@ -163,6 +191,7 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
               if(idphi < 0) { std::cout<<__FUNCTION__<<": error: invalid dphi calculated."<<std::endl; }
 //              if(isinclusive)
 //                {
+                  //std::cout << "filling incl mass " << dnt->mass[l] << "\n";
                   hmass_incl[idphi]->Fill(dnt->mass[l]);
                   hmass_incl_scaled[idphi]->Fill(dnt->mass[l], scale_primary * scale_associate);
 //                }
@@ -172,25 +201,66 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
 //                  hmass_sdbd_scaled[idphi]->Fill(dnt->mass[l], scale_primary * scale_associate);
 //                }
             }
-          for(int m=0;m<mixer.mix_tree->candSize;m++)
+          for(int m=0;m<mixtree->candSize;m++)
             {
-              float mixed_pT = mixer.mix_tree->pT[m];
-              float mixed_y = mixer.mix_tree->y[m];
-              if(mixer.mix_tree->pT[m] < pt2min || mixer.mix_tree->pT[m] > pt2max) continue;
-              if(fabs(mixer.mix_tree->y[m]) > yd) continue;
-              if(mixer.mix_tree->pT[m] >= dnt->pT[j] || fabs(mixer.mix_tree->pT[m]-dnt->pT[j])<0.0001 || mixer.mix_tree->flavor[m]*dnt->flavor[j] > 0) continue;
+              //std::cout << "m: " << m << "\n";
+              float mixed_pT = mixtree->pT[m];
+              float mixed_y = mixtree->y[m];
+              //std::cout << "mixed_pT: " << mixed_pT << "\n";
+              //std::cout << "mixed_y: " << mixed_y << "\n";
+              if(mixtree->pT[m] < pt2min || mixtree->pT[m] > pt2max) continue;
+              if(fabs(mixtree->y[m]) > yd) continue;
+              if(mixcentID<cents.size()-1 && !mvacents[mixcentID]->passmva(mixtree->pT[m], mixtree->mva[m])) continue;
+              if(mixtree->pT[m] >= dnt->pT[j] || 
+                  fabs(mixtree->pT[m]-dnt->pT[j])<0.0001 || 
+                  mixtree->flavor[m]*dnt->flavor[j] > 0) continue;
+              //std::cout << "passed cuts\n";
+              nass++;
+              double scale_primary = 1./eff[mixcentID]->GetBinContent(eff[mixcentID]->FindBin(primary_pT));
+              double scale_associate = 1./eff[mixcentID]->GetBinContent(eff[mixcentID]->FindBin(mixed_pT));
 
-              double scale_primary = 1./eff[centID]->GetBinContent(eff[centID]->FindBin(primary_pT));
-              double scale_associate = 1./eff[centID]->GetBinContent(eff[centID]->FindBin(mixed_pT));
+              if(j==0) y_sdbd->Fill(mixtree->y[m], scale_associate);
+              if(j==0) phi_sdbd->Fill(mixtree->phi[m], scale_associate);
+              if(j==0) pt_sdbd->Fill(mixtree->pT[m], scale_associate);
+              if(j==0) dca_sdbd->Fill(mixtree->dca[m], scale_associate);
+
               int idphi = -1;
-              float dphi = binfo->getdphi(dnt->phi[j], mixer.mix_tree->phi[m], idphi);
+              float dphi = binfo->getdphi(dnt->phi[j], mixtree->phi[m], idphi);
               if(idphi<0) {std::cout<<__FUNCTION__<< ": error: invalid dphi calculated."<<std::endl;}
-              hmass_sdbd[idphi]->Fill(mixer.mix_tree->mass[m]);
-              hmass_sdbd_scaled[idphi]->Fill(mixer.mix_tree->mass[m],scale_primary*scale_associate);
+              //std::cout << "filling sdbd mass " << mixtree->mass[m] << "\n";
+              hmass_sdbd[idphi]->Fill(mixtree->mass[m]);
+              hmass_sdbd_scaled[idphi]->Fill(mixtree->mass[m],scale_primary*scale_associate);
+            }
+        }
+      for(int m=0;m<mixtree->candSize;m++)
+        {
+          if(mixtree->pT[m]<pt1min || mixtree->pT[m]>pt1max) continue;
+          if(fabs(mixtree->y[m])>yd) continue;
+          if(mixcentID<cents.size()-1 && !mvacents[mixcentID]->passmva(mixtree->pT[m], mixtree->mva[m])) continue;
+          for(int n=0;n<mixtree->candSize;n++)
+            {
+              if(m==n) continue;
+              if(mixtree->pT[n]<pt2min || mixtree->pT[n]>pt2max) continue;
+              if(fabs(mixtree->y[n])>yd) continue;
+              if(mixcentID<cents.size()-1 && !mvacents[mixcentID]->passmva(mixtree->pT[n], mixtree->mva[n])) continue;
+              if(mixtree->pT[n] >= mixtree->pT[m] ||
+                  fabs(mixtree->pT[n]-mixtree->pT[m])<0.0001 ||
+                  mixtree->flavor[n]*mixtree->flavor[m] > 0) continue;
+              double scale_primary = 1./eff[mixcentID]->GetBinContent(eff[mixcentID]->FindBin(mixtree->pT[m]));
+              double scale_associate = 1./eff[mixcentID]->GetBinContent(eff[mixcentID]->FindBin(mixtree->pT[n]));
+              int idphi = -1;
+              float dphi = binfo->getdphi(mixtree->phi[m],mixtree->phi[n],idphi);
+              if(idphi<0) {std::cout<<__FUNCTION__<<": error: invalid dphi calculated."<<std::endl;}
+              hmass_mix[idphi]->Fill(mixtree->mass[n]);
+              hmass_mix_scaled[idphi]->Fill(mixtree->mass[n],scale_primary*scale_associate);
             }
         }
     }
   xjjc::progressbar_summary(nentries);
+  std::cout << "n_incl: " << ntrig << "\n";
+  std::cout << "n_sdbd: " << nass << "\n";
+  std::cout << "n_cand: " << ncand << "\n";
+  std::cout << "n_mix: " << nmix << "\n";
   TH1F* phi_sgl = (TH1F*)phi_incl->Clone("phi_sgl");
   TH1F* y_sgl = (TH1F*)y_incl->Clone("y_sgl");
   TH1F* pt_sgl = (TH1F*)pt_incl->Clone("pt_sgl");
@@ -230,12 +300,22 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
       hh->Sumw2();
       hh->Write();
     }
+  for(auto& hh : hmass_mix)
+    {
+      hh->Sumw2();
+      hh->Write();
+    }
   for(auto& hh : hmass_incl_scaled)
     {
       hh->Sumw2();
       hh->Write();
     }
   for(auto& hh : hmass_sdbd_scaled)
+    {
+      hh->Sumw2();
+      hh->Write();
+    }
+  for(auto& hh : hmass_mix_scaled)
     {
       hh->Sumw2();
       hh->Write();
