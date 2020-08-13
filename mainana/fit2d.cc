@@ -6,6 +6,7 @@
 #include "TFile.h"
 
 #include <numeric>
+#include "color.hpp"
 using namespace RooFit;
 
 void xjjroot::fit2d::resolveoption()
@@ -423,12 +424,16 @@ RooFitResult* xjjroot::fit2d::simfit(
                  0.01 * num_max, 0.001 * num_max, 0.1 * num_max);
   RooArgList nums(nss, nbb, nww, nsb, nbs, nsw, nws, nbw, nwb, "nums");
 
+  // copy the PDF so they can be plotted separately
+  RooAddPdf sbx(sigx, "sbx");
+  RooAddPdf swx(sigx, "swx");
+
   // Model for D0
   RooAddPdf modelx("modelx", "composite pdf",
-      RooArgList(sigx, bkgx, swp, sigx, bkgx, sigx, swp, bkgx, swp), nums);
+      RooArgList(sigx, bkgx, swp, sbx, bkgx, swx, swp, bkgx, swp), nums);
   // Model for D0bar
   RooAddPdf modely("modely", "composite pdf",
-      RooArgList(sigx, bkgx, swp, bkgx, sigx, swp, sigx, swp, bkgx), nums);
+      RooArgList(sigx, bkgx, swp, bkgx, sbx, swp, swx, swp, bkgx), nums);
 
   // Construct a simultaneous pdf using category sample as index
   RooSimultaneous simPdf("simPdf", "simultaneous pdf", sample);
@@ -462,6 +467,7 @@ RooFitResult* xjjroot::fit2d::simfit(
 
   // Plot the result
   auto canv = new TCanvas("Canvas", "Canvas", 800, 600);
+  canv->SetFillColor(color::snow2);
   frame2->Draw();
   canv->SaveAs(outputname + "_swapfit" +".pdf");
 
@@ -472,36 +478,54 @@ RooFitResult* xjjroot::fit2d::simfit(
     RooPlot *plot = m1.frame(Title(name + "_plot"), Bins(60));
     combData.plotOn(plot, Name("pdat" + name), Cut("sample==sample::" + name));
     simPdf.plotOn(plot, Slice(sample, m), ProjWData(sample, combData),
-                  VisualizeError(*r_ml_wgt_corr));
+                  LineColor(color::frost2), VisualizeError(*r_ml_wgt_corr));
     combData.plotOn(plot, Name("pdat" + name), Cut("sample==sample::" + name),
               DataError(RooAbsData::SumW2));
-    simPdf.plotOn(plot, Name("pfit" + name),
+    simPdf.plotOn(plot, Name("pfit" + name), LineColor(color::frost2),
                   Slice(sample, m), ProjWData(sample, combData));
     simPdf.plotOn(plot, Name("psig" + name), Slice(sample, m),
                   ProjWData(sample, combData), Components(sigx),
-                 DrawOption("LF"), FillStyle(3002), FillColor(kOrange - 3),
-                 LineStyle(2), LineColor(kOrange - 3));
+                  DrawOption("LF"), FillStyle(3325), FillColor(color::aurora0),
+                  LineColor(color::aurora0));
+    simPdf.plotOn(plot, Name("psb" + name), Slice(sample, m),
+                  ProjWData(sample, combData), Components(sbx),
+                  DrawOption("LF"), FillStyle(3352), FillColor(color::aurora2),
+                  LineColor(color::aurora2));
+    simPdf.plotOn(plot, Name("psw" + name), Slice(sample, m),
+                  ProjWData(sample, combData), Components(swx),
+                  DrawOption("LF"), FillStyle(1001), FillColor(color::aurora4),
+                  LineColor(color::aurora4));
     simPdf.plotOn(plot, Name("pbkg" + name), Slice(sample, m),
                   ProjWData(sample, combData), Components(bkgx),
-                 LineStyle(2), LineColor(4));
+                  LineStyle(2), LineColor(color::frost2));
     simPdf.plotOn(plot, Name("pswp" + name), Slice(sample, m),
                   ProjWData(sample, combData), Components(swp), LineStyle(1),
-                  DrawOption("LF"), FillStyle(3005), FillColor(kGreen + 4),
-                  LineColor(kGreen + 4));
+                  DrawOption("LF"), FillStyle(3005), FillColor(color::frost0),
+                  LineColor(color::frost0));
     plot->Draw();
 
-    TLegend *leg = new TLegend(0.69, 0.18, 0.89, 0.48, NULL, "brNDC");
+    float x1 = 0.68, x2 = 0.89, y1 = 0.68, y2 = 0.88;
+    TLegend *legtop = new TLegend(x1, y1, x2, y2, NULL, "brNDC");
+    legtop->SetBorderSize(0);
+    legtop->SetFillStyle(0);
+    legtop->SetTextFont(42);
+    legtop->SetTextSize(0.04);
+    legtop->AddEntry("pdat" + name, "Data", "pl");
+    legtop->AddEntry("pfit" + name, "Fit", "l");
+    legtop->AddEntry("pbkg" + name, "Combinatorial", "l");
+
+    TLegend *leg = new TLegend(x1, 0.20, x2, 0.50, NULL, "brNDC");
     leg->SetBorderSize(0);
     leg->SetFillStyle(0);
     leg->SetTextFont(42);
     leg->SetTextSize(0.04);
 
-    leg->AddEntry("pdat" + name, "Data", "pl");
-    leg->AddEntry("pfit" + name, "Fit", "l");
-    leg->AddEntry("psig" + name, "D^{0}+#bar{D^{#lower[0.2]{0}}} Signal", "f");
+    leg->AddEntry("psig" + name, "D^{0} Sig-#bar{D^{#lower[0.2]{0}}} Sig", "f");
+    leg->AddEntry("psb" + name, "D^{0} Sig-#bar{D^{#lower[0.2]{0}}} Bkg", "f");
+    leg->AddEntry("psw" + name, "D^{0} Sig-#bar{D^{#lower[0.2]{0}}} Swap", "f");
     leg->AddEntry("pswp" + name, "K-#pi swapped", "f");
-    leg->AddEntry("pbkg" + name, "Combinatorial", "l");
 
+    legtop->Draw("same");
     leg->Draw("same");
 
     drawCMS(collisionsyst);
