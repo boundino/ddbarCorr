@@ -10,14 +10,13 @@
 
 #include <algorithm>
 
-void ddbar_fithist(std::string inputname, std::string swapname, std::string outputdir)
+void ddbar_2dfit(std::string inputname, std::string swapname, std::string outputdir)
 {
   TFile* inf = TFile::Open(inputname.c_str());
   TFile *infswap = TFile::Open(swapname.c_str());
   // ddbar::kinematics* kinfo = new ddbar::kinematics(inf);
   ddbar::kinematics* kinfo = new ddbar::kinematics(2, 999, 2, 999, 1, 0, 80);
-  // ddbar::binning* binfo = new ddbar::binning(inf);
-  ddbar::binning* binfo = new ddbar::binning("4pi");
+  ddbar::binning* binfo = new ddbar::binning(inf);
 
   // import D0 mass and weight tree
   TTree* tmass = (TTree*) inf->Get("dmass");
@@ -115,7 +114,7 @@ void ddbar_fithist(std::string inputname, std::string swapname, std::string outp
 int main(int argc, char* argv[])
 {
   if (argc==4) {
-    ddbar_fithist(argv[1], argv[2], argv[3]);
+    ddbar_2dfit(argv[1], argv[2], argv[3]);
     return 0;
   } else {
     return 1;

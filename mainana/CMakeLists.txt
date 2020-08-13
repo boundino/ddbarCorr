@@ -9,6 +9,10 @@ add_compile_options(-Wall -Wextra -g -O0)
 list(APPEND CMAKE_PREFIX_PATH $ENV{ROOTSYS})
 find_package(ROOT 6.16 REQUIRED)
 
+project(ddbar_efficiency)
+add_executable(ddbar_efficiency efficiency.cc)
+target_link_libraries(ddbar_efficiency PUBLIC ROOT::TreePlayer)
+
 project(ddbar_savetree)
 include_directories(../includes)
 add_executable(ddbar_savetree ddbar_savetree.cc)

@@ -146,6 +146,7 @@ void ddbar_saveDpair(std::string inputdata, std::string inputmc,
   }
   outf->cd();
   dmptree->Write();
+  binfo->write();
   outf->Close();
 }
 
@@ -307,6 +308,7 @@ void ddbar_swapmc(std::string swapmc, std::string output, std::string inputeff,
   }
   outf->cd();
   outf->Write();
+  binfo->write();
   outf->Close();
 }
 
