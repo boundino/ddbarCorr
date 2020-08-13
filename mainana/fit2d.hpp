@@ -181,7 +181,7 @@ namespace xjjroot
     TF1* clonefun(const TF1* fun, TString fun_name) const;
     void sethist(TH1* h) const;
     void drawCMS(TString collision, TString snn="5.02") const;
-    void drawtex(Double_t x, Double_t y, const char* text, Float_t tsize=0.04, Short_t align=12) const;
+    void drawtex(Double_t x, Double_t y, const char* text, Float_t tsize=0.04, Short_t align=12, int color=kBlack) const;
     void drawleg(TH1* h) const;
     void drawline(Double_t x1, Double_t y1, Double_t x2, Double_t y2, Color_t lcolor=kBlack, Style_t lstyle=1, Width_t lwidth=2) const;
     void setgstyle() const;

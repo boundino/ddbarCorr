@@ -483,18 +483,18 @@ RooFitResult* xjjroot::fit2d::simfit(
               DataError(RooAbsData::SumW2));
     simPdf.plotOn(plot, Name("pfit" + name), LineColor(color::frost2),
                   Slice(sample, m), ProjWData(sample, combData));
-    simPdf.plotOn(plot, Name("psig" + name), Slice(sample, m),
-                  ProjWData(sample, combData), Components(sigx),
-                  DrawOption("LF"), FillStyle(3325), FillColor(color::aurora0),
-                  LineColor(color::aurora0));
-    simPdf.plotOn(plot, Name("psb" + name), Slice(sample, m),
-                  ProjWData(sample, combData), Components(sbx),
-                  DrawOption("LF"), FillStyle(3352), FillColor(color::aurora2),
-                  LineColor(color::aurora2));
     simPdf.plotOn(plot, Name("psw" + name), Slice(sample, m),
-                  ProjWData(sample, combData), Components(swx),
+                  ProjWData(sample, combData), Components("sigx,sbx,swx"),
                   DrawOption("LF"), FillStyle(1001), FillColor(color::aurora4),
                   LineColor(color::aurora4));
+    simPdf.plotOn(plot, Name("psb" + name), Slice(sample, m),
+                  ProjWData(sample, combData), Components("sigx,sbx"),
+                  DrawOption("LF"), FillStyle(1001), FillColor(color::aurora2),
+                  LineColor(color::aurora2));
+    simPdf.plotOn(plot, Name("psig" + name), Slice(sample, m),
+                  ProjWData(sample, combData), Components(sigx),
+                  DrawOption("LF"), FillStyle(1001), FillColor(color::aurora0),
+                  LineColor(color::aurora0));
     simPdf.plotOn(plot, Name("pbkg" + name), Slice(sample, m),
                   ProjWData(sample, combData), Components(bkgx),
                   LineStyle(2), LineColor(color::frost2));
@@ -531,7 +531,7 @@ RooFitResult* xjjroot::fit2d::simfit(
     drawCMS(collisionsyst);
 
     TString other = (name == m1.GetName()) ? "D" : "#bar{D}";
-    Float_t texxpos = 0.22, texypos = 0.55, texdypos = 0.053;
+    Float_t texxpos = 0.22, texypos = 0.55, texdypos = 0.058;
     if (!vtex.empty()) {
       texypos += texlinespc;
       for (std::vector<TString>::const_iterator it = vtex.begin();
@@ -543,7 +543,8 @@ RooFitResult* xjjroot::fit2d::simfit(
     //              mass_dzero_signal_h));
     if (fdrawyield) {
       drawtex(texxpos, texypos = (texypos - texdypos),
-              Form("N = %.0f #pm %.0f", yield, yieldErr));
+              Form("N = %.0f #pm %.0f", yield, yieldErr), 0.04, 12,
+              color::aurora0);
     }
 
     if (fsaveplot) {
@@ -669,13 +670,14 @@ void xjjroot::fit2d::drawCMS(TString collision, TString snn/*="5.02"*/) const
   texCol->Draw();
 }
 
-void xjjroot::fit2d::drawtex(Double_t x, Double_t y, const char* text, Float_t tsize/*=0.04*/, Short_t align/*=12*/) const
+void xjjroot::fit2d::drawtex(Double_t x, Double_t y, const char* text, Float_t tsize/*=0.04*/, Short_t align/*=12*/, int color) const
 {
   TLatex* tex = new TLatex(x, y, text);
   tex->SetNDC();
   tex->SetTextFont(42);
   tex->SetTextAlign(align);
   tex->SetTextSize(tsize);
+  tex->SetTextColor(color);
   tex->Draw();
 }
 
