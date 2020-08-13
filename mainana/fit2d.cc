@@ -472,6 +472,7 @@ RooFitResult* xjjroot::fit2d::simfit(
   canv->SaveAs(outputname + "_swapfit" +".pdf");
 
   std::vector<TString> dim = {"trig", "asso"};
+  std::vector<TString> dzerotex = {"D^{0}", "#bar{D^{#lower[0.2]{0}}}"};
 
   for (auto m : dim) {
     TString name = m;
@@ -520,9 +521,11 @@ RooFitResult* xjjroot::fit2d::simfit(
     leg->SetTextFont(42);
     leg->SetTextSize(0.04);
 
-    leg->AddEntry("psig" + name, "D^{0} Sig-#bar{D^{#lower[0.2]{0}}} Sig", "f");
-    leg->AddEntry("psb" + name, "D^{0} Sig-#bar{D^{#lower[0.2]{0}}} Bkg", "f");
-    leg->AddEntry("psw" + name, "D^{0} Sig-#bar{D^{#lower[0.2]{0}}} Swap", "f");
+    TString thisD = (name == dim[0]) ? dzerotex[0] : dzerotex[1];
+    TString otherD = (name == dim[0]) ? dzerotex[1] : dzerotex[0];
+    leg->AddEntry("psw" + name, thisD + " Sig - " + otherD + " Swap", "f");
+    leg->AddEntry("psb" + name, thisD + " Sig - " + otherD + " Bkg", "f");
+    leg->AddEntry("psig" + name, thisD + " Sig - " + otherD + " Sig", "f");
     leg->AddEntry("pswp" + name, "K-#pi swapped", "f");
 
     legtop->Draw("same");
@@ -530,7 +533,6 @@ RooFitResult* xjjroot::fit2d::simfit(
 
     drawCMS(collisionsyst);
 
-    TString other = (name == m1.GetName()) ? "D" : "#bar{D}";
     Float_t texxpos = 0.22, texypos = 0.55, texdypos = 0.058;
     if (!vtex.empty()) {
       texypos += texlinespc;
