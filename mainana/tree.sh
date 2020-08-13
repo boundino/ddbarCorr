@@ -33,5 +33,5 @@ for rr in ${run[@]}
 do
     outputdir=dd_cent${cmin[rr]}-${cmax[rr]}_pt${pt1min[rr]}-${pt1max[rr]}_y${dy[rr]/'.'/'p'}_${label}
     [[ $RUN_SAVETREE -eq 1 ]] && { build/ddbar_savetree $inputdata $inputmc $outputdir ${pt1min[rr]} ${pt1max[rr]} ${pt2min[rr]} ${pt2max[rr]} ${dy[rr]} ${cmin[rr]} ${cmax[rr]} $label $eff $swapmc $mctree; }
-    [[ $RUN_2DFIT -eq 1 ]] && { build/ddbar_2dfit $dpairtree "rootfiles/$outputdir/${swaptree}" $outputdir ; }
+    [[ $RUN_2DFIT -eq 1 ]] && { build/ddbar_2dfit $"rootfiles/$outputdir/$dpairtree" "rootfiles/$outputdir/${swaptree}" $outputdir ; }
 done

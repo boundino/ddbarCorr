@@ -80,8 +80,8 @@ void ddbar_saveDpair(std::string inputdata, std::string inputmc,
   dmptree->Branch("y2", &y2, "y2/F");
 
   // Event loop
-  int nthreads = 1;
-  ROOT::EnableImplicitMT(nthreads);
+  // int nthreads = 1;
+  // ROOT::EnableImplicitMT(nthreads);
   int nentries = dnt->nt()->GetEntries();
   if (nentries >= event_cutoff) {
     std::cout << "[Warning] Limited to " << event_cutoff << "events"
