@@ -101,7 +101,7 @@ void ddbar_savehist(std::string inputdata, std::string inputmc, std::string outp
   TH1F* hmass_trig = new TH1F("hmass_trig", ";m_{K#pi} (GeV/c^{2});Entries", 60, dmass_min, dmass_max);
   TH1F* mc_cent = (TH1F*)ineff->Get("mc_cent");
   
-  int nentries = 100000;//dnt->nt()->GetEntries();
+  int nentries = dnt->nt()->GetEntries();
 
   int ntrig = 0;
   int nass = 0;

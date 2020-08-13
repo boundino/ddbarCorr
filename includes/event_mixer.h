@@ -108,7 +108,7 @@ void EventMixer::buildTreeBins(ddtree::dtree* t)
   }
 
   // loop over original TTree, fill appropriate TTree
-  size_t nentries = 100000;//t->nt()->GetEntries();
+  size_t nentries = t->nt()->GetEntries();
   std::cout << "Building event-mixing TTrees...\n";
   for(size_t evt=0;evt<nentries;evt++)
   {

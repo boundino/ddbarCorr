@@ -18,12 +18,13 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
   
   TH1F* hmassmc_sgl = (TH1F*)inf->Get("hmassmc_sgl");
   TH1F* hmassmc_swp = (TH1F*)inf->Get("hmassmc_swp");
-  std::vector<TH1F*> hmass_incl(binfo->nphibin(), 0), hmass_sdbd(binfo->nphibin(), 0);
+  std::vector<TH1F*> hmass_incl(binfo->nphibin(), 0), hmass_sdbd(binfo->nphibin(), 0), hmass_mix(binfo->nphibin(), 0);
   std::vector<TH1F*> hmass_incl_det(binfo->nphibin(), 0);
   for(int k=0; k<binfo->nphibin(); k++)
     {
       hmass_incl[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_incl", k));
       hmass_sdbd[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_sdbd", k));
+      hmass_mix[k] = (TH1F*)inf->Get(Form("hmass_dphi%d_mix",k));
       hmass_incl_det[k] = (TH1F*)inf->Get(Form("hmass_phi%d_incl_det", k));
     }
   TH1F* hmass_trig = (TH1F*)inf->Get("hmass_trig");
@@ -31,6 +32,7 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
   TH1F* hdphi_incl = new TH1F("hdphi_incl", ";#Delta#phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / #pi;N(D^{0}-#bar{D^{#lower[0.2]{0}}})", binfo->nphibin(), binfo->phibin().data());
   TH1F* hdphi_sdbd = new TH1F("hdphi_sdbd", ";#Delta#phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / #pi;N(D^{0}-#bar{D^{#lower[0.2]{0}}})", binfo->nphibin(), binfo->phibin().data());
   TH1F* hdphi_sdbd_noscale = new TH1F("hdphi_sdbd_noscale", ";#Delta#phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / #pi;N(D^{0}-#bar{D^{#lower[0.2]{0}}})", binfo->nphibin(), binfo->phibin().data());
+  TH1F* hdphi_mix = new TH1F("hdphi_mix", ";#Delta#phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / #pi;N(D^{0}-#bar{D^{#lower[0.2]{0}}})", binfo->nphibin(), binfo->phibin().data());
   TH1F* hdphi_sub = new TH1F("hdphi_sub", ";#Delta#phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / #pi;N(D^{0}-#bar{D^{#lower[0.2]{0}}})", binfo->nphibin(), binfo->phibin().data());
   TH1F* hdphi_sub_norm = new TH1F("hdphi_sub_norm", ";#Delta#phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / #pi;1/N dN/d#Delta#phi", binfo->nphibin(), binfo->phibin().data());
 
@@ -85,8 +87,13 @@ void ddbar_fithist(std::string inputname, std::string outputdir)
       hdphi_sdbd->SetBinError(k+1, fitter->GetYE()*sidebandscale);
       hdphi_sdbd->Sumw2();
 
-      hdphi_sub->SetBinContent(k+1, hdphi_incl->GetBinContent(k+1)-hdphi_sdbd->GetBinContent(k+1));
-      hdphi_sub->SetBinError(k+1, sqrt(fabs(hdphi_incl->GetBinError(k+1)*hdphi_incl->GetBinError(k+1)+hdphi_sdbd->GetBinError(k+1)*hdphi_sdbd->GetBinError(k+1))));
+      fitter->fit(hmass_mix[k], hmassmc_sgl, hmassmc_swp, "PbPb", Form("%s/idx/c%s", outputname.c_str(), hmass_mix[k]->GetName()), label);
+      hdphi_mix->SetBinContent(k+1,fitter->GetY());
+      hdphi_mix->SetBinError(k+1,fitter->GetYE());
+      hdphi_mix->Sumw2();
+
+      hdphi_sub->SetBinContent(k+1, hdphi_incl->GetBinContent(k+1)-hdphi_sdbd->GetBinContent(k+1)+hdphi_mix->GetBinContent(k+1));
+      hdphi_sub->SetBinError(k+1, sqrt(fabs(hdphi_incl->GetBinError(k+1)*hdphi_incl->GetBinError(k+1)+hdphi_sdbd->GetBinError(k+1)*hdphi_sdbd->GetBinError(k+1)+hdphi_mix->GetBinError(k+1)*hdphi_mix->GetBinError(k+1))));
 
       hdphi_sub_norm->SetBinContent(k+1, hdphi_sub->GetBinContent(k+1) / hdphi_sub_norm->GetBinWidth(k+1));
       hdphi_sub_norm->SetBinError(k+1, hdphi_sub->GetBinError(k+1) / hdphi_sub_norm->GetBinWidth(k+1));
