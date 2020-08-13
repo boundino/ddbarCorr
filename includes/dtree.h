@@ -1,3 +1,6 @@
+#ifndef DTREE_H
+#define DTREE_H
+
 #include "xjjrootuti.h"
 #include "xjjcuti.h"
 #include <TTree.h>
@@ -181,3 +184,5 @@ bool ddtree::mvas::passmva(float pt, float mva)
   if(j < 0) return false; // !
   return mva > fvalues[j];
 }
+
+#endif
