@@ -287,7 +287,7 @@ RooFitResult* xjjroot::fit2d::simfit(
 
   RooMsgService::instance().getStream(1).removeTopic(Integration);
   RooMsgService::instance().getStream(1).removeTopic(Plotting);
-  // RooMsgService::instance().getStream(1).removeTopic(Minimization);
+  RooMsgService::instance().getStream(1).removeTopic(Minimization);
 
   TString fitoption = ffitverbose ? "L m" : "L m q";
   setgstyle();
@@ -295,14 +295,14 @@ RooFitResult* xjjroot::fit2d::simfit(
   const Double_t min_fit_dzero = 1.73;
   // Declare an observable for D0 mass
   RooRealVar m1("m1", "m_{#pi K}^{1} / GeV", min_fit_dzero, max_hist_dzero);
-  // RooRealVar m2("m2", "m_{#pi K}^{2} / GeV", min_fit_dzero, max_hist_dzero);
+  RooRealVar m2("m2", "m_{#pi K}^{2} / GeV", min_fit_dzero, max_hist_dzero);
 
   // weight of the D0 mass
   RooRealVar w("weight", "weight", min_weight, max_weight);
 
   // set range for D0 mass
   m1.setRange("D0range", min_fit_dzero, max_hist_dzero);
-  // m2.setRange("D0range", min_fit_dzero, max_hist_dzero);
+  m2.setRange("D0range", min_fit_dzero, max_hist_dzero);
 
   RooRealVar iPhi("iPhi", "dphi bin ID", 0, 20);
   RooRealVar werr("weightErr", "error of weight", min_weight, max_weight);
@@ -311,99 +311,120 @@ RooFitResult* xjjroot::fit2d::simfit(
 
   // Define category to distinguish trigger and associate samples events
   RooCategory sample("sample", "sample");
-  sample.defineType("trig");
-  sample.defineType("asso");
-
-  // tree containing associate D
-  TFile ftmp("tmp.root", "recreate");
-  TTree asso("ass", "ass");
-  TTreeReader reader(sigtree);
-  TTreeReaderValue<Float_t> sigmass(reader, "m2");
-  TTreeReaderValue<Int_t> sigiphi(reader, "iPhi");
-  Float_t smass;
-  asso.Branch("m1", &smass, "m1/F");
-  while (reader.Next()) {
-    if (*sigiphi != iBin) continue;
-    smass = *sigmass;
-    asso.Fill();
-  }
+  sample.defineType("x");
+  sample.defineType("y");
 
   // Construct unbinned dataset importing tree branches mass matching
   // between branches and RooRealVars
   // Select the dphi bin in question
-  RooDataSet ds("ds", "ds", RooArgSet(m1, iPhi),
+  RooDataSet ds("ds", "ds", RooArgSet(m1, m2, iPhi),
                 Cut(TString::Format("iPhi == %i", iBin)), Import(*sigtree));
 
-  RooDataSet ds_asso("dsasso", "dsasso", RooArgSet(m1), Import(asso));
+  RooDataSet dsm1 = *(RooDataSet *)ds.reduce(RooArgSet(m1));
+  RooDataSet dsm2 = *(RooDataSet *)ds.reduce(RooArgSet(m2));
+  // RooDataSet ds_asso("dsasso", "dsasso", RooArgSet(m1), Import(y));
 
-  RooDataSet swapds("swapds", "swapped dataset", RooArgSet(m1, isSwap1),
-                    Cut(TString::Format("isSwap1")), Import(*swaptree));
+  RooDataSet swapds("swapds", "swapped dataset", RooArgSet(m1, isSwap1, m2, isSwap2),
+                    Import(*swaptree));
+  RooDataSet swapdsm1 = *(RooDataSet *)swapds.reduce(RooArgSet(m1), "isSwap1");
+  RooDataSet swapdsm2 = *(RooDataSet *)swapds.reduce(RooArgSet(m2), "isSwap2");
+
+  RooDataSet sigdsm1 = *(RooDataSet *)swapds.reduce(RooArgSet(m1), "!isSwap1");
+  RooDataSet sigdsm2 = *(RooDataSet *)swapds.reduce(RooArgSet(m2), "!isSwap2");
 
   // Construct combined dataset in (x,sample)
-  RooDataSet combData("combData", "combined data", m1, Index(sample),
-                      Import("trig", ds), Import("asso", ds_asso));
+  RooDataSet combData("combData", "combined data", RooArgSet(m1, m2), Index(sample),
+                      Import("x", dsm1), Import("y", dsm2));
 
   // Double gaussian as signal p.d.f.
-  // Fix the mean at D0 mass
-  RooRealVar mean("mean", "mean of gaussians", mass_dzero, mass_dzero - 0.01, mass_dzero + 0.01);
-  mean.setConstant(true);
-  RooRealVar sigma1x("sigma1x", "width of gaussians", 0.02, 0.005, 0.04);
-  RooRealVar sigma2x("sigma2x", "width of gaussians", 0.005, 0.001, 0.02);
+  // Don't fix the mean at nominal D0 mass
+  RooRealVar mean("mean", "mean of gaussians",
+                  mass_dzero, mass_dzero - 0.01, mass_dzero + 0.01);
+  RooRealVar sigma1x("sigma1x", "width of gaussians", 0.04, 0.02, 0.1);
+  RooRealVar sigma2x("sigma2x", "width of gaussians", 0.01, 0.001, 0.02);
   RooGaussian sig1x("sig1x", "Signal component 1", m1, mean, sigma1x);
   RooGaussian sig2x("sig2x", "Signal component 2", m1, mean, sigma2x);
   // Sum the signal components into a composite signal p.d.f.
   RooRealVar sigfracx("sigfracx", "fraction of component 1 in signal", 0.5, 0.001, 0.999);
   RooAddPdf sigx("sigx", "Signal", RooArgList(sig1x, sig2x), sigfracx);
+  // RooGaussian sigx(sig2x, "sigx");
 
-  RooRealVar sigma1y("sigma1y", "width of gaussians", 0.02, 0.005, 0.04);
-  RooRealVar sigma2y("sigma2y", "width of gaussians", 0.005, 0.001, 0.02);
-  RooGaussian sig1y("sig1y", "Signal component 1", m1, mean, sigma1y);
-  RooGaussian sig2y("sig2y", "Signal component 2", m1, mean, sigma2y);
-  // Sum the signal components into a composite signal p.d.f.
-  RooRealVar sigfracy("sigfracy", "fraction of component 1 in signal", 0.5, 0.001, 0.999);
-  RooAddPdf sigy("sigy", "Signal", RooArgList(sig1y, sig2y), sigfracy);
+  RooGaussian sig1y("sig1y", "Signal component 1", m2, mean, sigma1x);
+  RooGaussian sig2y("sig2y", "Signal component 2", m2, mean, sigma2x);
+  RooAddPdf sigy("sigy", "Signal", RooArgList(sig1y, sig2y), sigfracx);
 
   // Build 3rd-order Chebychev polynomial p.d.f. as combinatorial background
   RooRealVar a1("a1", "a1", -0.2, -.8, .8);
   RooRealVar a2("a2", "a2", 0.02, -.1, .1);
   RooRealVar a3("a3", "a3", 0.0, -.1, .1);
   RooChebychev bkgx("bkgx", "Background", m1, RooArgSet(a1, a2, a3));
+  // RooChebychev bkgx("bkgx", "Background", m1, RooArgSet(a1, a3));
 
-  RooRealVar b1("b1", "b1", -0.2, -.8, .8);
-  RooRealVar b2("b2", "b2", 0.02, -.1, .1);
-  RooRealVar b3("b3", "b3", 0.0, -.1, .1);
-  RooChebychev bkgy("bkgy", "Background", m1, RooArgSet(b1, b2, b3));
+  // RooRealVar b1("b1", "b1", -0.2, -.8, .8);
+  // RooRealVar b2("b2", "b2", 0.02, -.1, .1);
+  // RooRealVar b3("b3", "b3", 0.0, -.1, .1);
+  // RooChebychev bkgy("bkgy", "Background", m2, RooArgSet(a1, a3));
+  RooChebychev bkgy("bkgy", "Background", m2, RooArgSet(a1, a2, a3));
 
-  // 2-Gaussian as swapped K pi mass
+  // Gaussian as swapped K pi mass
+  RooRealVar swmean("swmean", "mean of gaussians", mass_dzero, mass_dzero - 0.01, mass_dzero + 0.01);
   RooRealVar sigmas1x("sigmas1x", "width of swapped mass", 0.1, 0.05, 2);
-  // RooRealVar sigmas2x("sigmas2x", "width of swapped mass", 0.02, 0.01, 0.1);
-  // RooGaussian swapped1x("swapped1x", "swapped k pi mass", m1, mean, sigmas1x);
-  // RooGaussian swapped2x("swapped2x", "swapped k pi mass", m1, mean, sigmas2x);
-  // RooRealVar swpfracx("swpfracx", "fraction of component 1 in swapped", 0.5, 0.001, 0.999);
-  // RooAddPdf swappedx("swappedx", "swp", RooArgList(swapped1x, swapped2x), swpfracx);
-
   // RooRealVar sigmas1y("sigmas1y", "width of swapped mass", 0.1, 0.05, 2);
-  // RooRealVar sigmas2y("sigmas2y", "width of swapped mass", 0.02, 0.01, 0.1);
-  // RooGaussian swapped1y("swapped1y", "swapped k pi mass", m1, mean, sigmas1y);
-  // RooGaussian swapped2y("swapped2y", "swapped k pi mass", m1, mean, sigmas2y);
-  // RooRealVar swpfracy("swpfracy", "fraction of component 1 in swapped", 0.5, 0.001, 0.999);
-  // RooAddPdf swappedy("swappedy", "swp", RooArgList(swapped1y, swapped2y), swpfracy);
 
-  RooGaussian swp("swp", "swapped k pi mass", m1, mean, sigmas1x);
+  RooGaussian swpx("swpx", "swapped k pi mass", m1, swmean, sigmas1x);
+  RooGaussian swpy("swpy", "swapped k pi mass", m2, swmean, sigmas1x);
 
-  swp.fitTo(swapds, Save());
-  RooPlot *frame2 = m1.frame(Title("swapped_plot"), Bins(30));
-  swapds.plotOn(frame2);
-  swp.plotOn(frame2);
+  swpy.fitTo(swapdsm2, Save());
+  RooPlot *frame3 = m2.frame(Title("swappedm2_plot"), Bins(30));
+  swapdsm2.plotOn(frame3);
+  swpy.plotOn(frame3);
+  swpy.paramOn(frame3);
 
+  // Plot the result
+  auto canv = new TCanvas("Canvas", "Canvas", 800, 600);
+  canv->SetFillColor(color::snow2);
+  frame3->Draw();
+  canv->SaveAs(outputname + "_swapfitm2" + ".pdf");
+
+  swpx.fitTo(swapdsm1, Save());
+  RooPlot *frame2 = m1.frame(Title("swappedm1_plot"), Bins(30));
+  swapdsm1.plotOn(frame2);
+  swpx.plotOn(frame2);
+  swpx.paramOn(frame2);
   sigmas1x.setConstant(true);
+  frame2->Draw();
+  canv->SaveAs(outputname + "_swapfitm1" + ".pdf");
 
+  sigy.fitTo(sigdsm2, Save());
+  RooPlot *framesig2 = m2.frame(Title("sigm2_plot"), Bins(30));
+  sigdsm2.plotOn(framesig2);
+  sigy.plotOn(framesig2);
+  sigy.paramOn(framesig2, Layout(0.6), Format("NEU", AutoPrecision(1)),
+               ShowConstants(false));
+  framesig2->Draw();
+  canv->SaveAs(outputname + "_sigfitm2" + ".pdf");
+
+  sigx.fitTo(sigdsm1, Save());
+  RooPlot *framesig1 = m1.frame(Title("sigm1_plot"), Bins(30));
+  sigdsm1.plotOn(framesig1);
+  sigx.plotOn(framesig1);
+  sigx.paramOn(framesig1, Layout(0.6), Format("NEU", AutoPrecision(1)),
+               ShowConstants(false));
+  sigma1x.setConstant(true);
+  sigma2x.setConstant(true);
+  sigfracx.setConstant(true);
+
+  framesig1->Draw();
+  canv->SaveAs(outputname + "_sigfitm1" + ".pdf");
+
+  mean.setConstant(true);
+  swmean.setConstant(true);
   // RooRealVar rsigswap("rsigswap", "coeff of signal", 1. / 3.);
-  // RooAddPdf sig("sig", "Signal", RooArgList(sigx, swapped), rsigswap);
+  // RooAddPdf sig("sig", "Signal", RooArgList(s
 
   const long num_max = ds.sumEntries("", "D0range");
 
-  // Initially, Nsig is set to 3% of the total entries, and Nswap = Nsig.
+  // Initially, Nsig is set to 3% of the total
   RooRealVar nss("nss", "number of signal-signal entries",
                  0.02 * num_max, 0.001 * num_max, 0.1 * num_max);
   RooRealVar nbb("nbb", "number of bg-bg entries",
@@ -411,6 +432,7 @@ RooFitResult* xjjroot::fit2d::simfit(
   RooRealVar nww("nww", "number of swap-swap entries",
                  0.02 * num_max, 0.001 * num_max, 0.1 * num_max);
   RooRealVar nsb("nsb", "number of signal-bg entries",
+                 // 0.02 * num_max, 0.001 * num_max, 0.1 * num_max);
                  0.02 * num_max, 0.001 * num_max, 0.1 * num_max);
   RooRealVar nbs("nbs", "number of bg-signal entries",
                  0.02 * num_max, 0.001 * num_max, 0.1 * num_max);
@@ -422,30 +444,53 @@ RooFitResult* xjjroot::fit2d::simfit(
                  0.01 * num_max, 0.001 * num_max, 0.1 * num_max);
   RooRealVar nwb("nwb", "number of swap-bg entries",
                  0.01 * num_max, 0.001 * num_max, 0.1 * num_max);
-  RooArgList nums(nss, nbb, nww, nsb, nbs, nsw, nws, nbw, nwb, "nums");
+  // RooArgList nums(nss, nbb, nww, nsb, nbs, nsw, nws, nbw, nwb, "nums");
+  // RooArgList nums(nss, nbb, nww, nsb, nsb, nsw, nsw, nbw, nbw, "nums");
+  // RooArgList nums(nss, nbb, nss, nsb, nsb, nss, nss, nsb, nsb, "nums");
+  // RooArgList nums(nss, nbb, nww, "nums");
+  RooArgList nums(nss, nbb, nss, "nums");
 
   // copy the PDF so they can be plotted separately
   RooAddPdf sbx(sigx, "sbx");
   RooAddPdf swx(sigx, "swx");
+  RooAddPdf sby(sigy, "sby");
+  RooAddPdf swy(sigy, "swy");
 
   // Model for D0
   RooAddPdf modelx("modelx", "composite pdf",
-      RooArgList(sigx, bkgx, swp, sbx, bkgx, swx, swp, bkgx, swp), nums);
+                   RooArgList(sigx, bkgx, swpx), nums);
+  // RooArgList(sigx, bkgx, swpx, sbx, bkgx, swx, swpx, bkgx, swpx), nums);
   // Model for D0bar
   RooAddPdf modely("modely", "composite pdf",
-      RooArgList(sigx, bkgx, swp, bkgx, sbx, swp, swx, swp, bkgx), nums);
+                   RooArgList(sigy, bkgy, swpy), nums);
+  // RooArgList(sigy, bkgy, swpy, bkgy, sby, swpy, swy, swpy, bkgy), nums);
 
   // Construct a simultaneous pdf using category sample as index
   RooSimultaneous simPdf("simPdf", "simultaneous pdf", sample);
 
   // Associate model with the physics state and model_ctl with the control state
-  simPdf.addPdf(modelx, "trig");
-  simPdf.addPdf(modely, "asso");
+  simPdf.addPdf(modelx, "x");
+  simPdf.addPdf(modely, "y");
+
+  // 1D fit
+  modelx.fitTo(dsm1, Save(), Extended(kTRUE), NumCPU(10));
+  RooPlot *framex = m1.frame(Title("m1_plot"), Bins(30));
+  dsm1.plotOn(framex, DataError(RooAbsData::SumW2));
+  modelx.plotOn(framex);
+  framex->Draw();
+  canv->SaveAs(outputname + "_fitm1.pdf");
+
+  modely.fitTo(dsm2, Save(), Extended(kTRUE), NumCPU(10));
+  RooPlot *framey = m2.frame(Title("m2_plot"), Bins(30));
+  dsm2.plotOn(framey, DataError(RooAbsData::SumW2));
+  modely.plotOn(framey);
+  framey->Draw();
+  canv->SaveAs(outputname + "_fitm2.pdf");
 
   // U n b i n n e d   M L   f i t
   // Extended to get Nsig directly
   RooFitResult *r_ml_wgt_corr =
-      simPdf.fitTo(combData, Save(), Extended(kTRUE), NumCPU(14));
+      simPdf.fitTo(combData, Save(), Extended(kTRUE), NumCPU(10));
 
   r_ml_wgt_corr->Print();
 
@@ -462,21 +507,21 @@ RooFitResult* xjjroot::fit2d::simfit(
     std::cout << ", " << i.getValV() / num_max << "\n";
     total += i.getValV();
   }
-  std::cout << "total: " << num_max << ", sum: " << total << ", ratio: " << total / num_max  << "\n";
+  std::cout << "total: " << num_max << ", sum: " << total << "\n";
 
 
-  // Plot the result
-  auto canv = new TCanvas("Canvas", "Canvas", 800, 600);
-  canv->SetFillColor(color::snow2);
-  frame2->Draw();
-  canv->SaveAs(outputname + "_swapfit" +".pdf");
-
-  std::vector<TString> dim = {"trig", "asso"};
+  std::vector<TString> dim = {"x", "y"};
   std::vector<TString> dzerotex = {"D^{0}", "#bar{D^{#lower[0.2]{0}}}"};
+  std::vector<RooRealVar> vars = {m1, m2};
 
-  for (auto m : dim) {
+  // lazy lambda to change x in strings to y
+  auto compstr = [] (TString str, TString com) {return str.ReplaceAll("x", com); };
+
+  for (unsigned i = 0; i < dim.size(); ++i) {
+    auto m = dim[i];
+    auto var = vars[i];
     TString name = m;
-    RooPlot *plot = m1.frame(Title(name + "_plot"), Bins(60));
+    RooPlot *plot = var.frame(Title(name + "_plot"), Bins(60));
     combData.plotOn(plot, Name("pdat" + name), Cut("sample==sample::" + name));
     simPdf.plotOn(plot, Slice(sample, m), ProjWData(sample, combData),
                   LineColor(color::frost2), VisualizeError(*r_ml_wgt_corr));
@@ -484,25 +529,25 @@ RooFitResult* xjjroot::fit2d::simfit(
               DataError(RooAbsData::SumW2));
     simPdf.plotOn(plot, Name("pfit" + name), LineColor(color::frost2),
                   Slice(sample, m), ProjWData(sample, combData));
-    simPdf.plotOn(plot, Name("psw" + name), Slice(sample, m),
-                  ProjWData(sample, combData), Components("sigx,sbx,swx"),
+    simPdf.plotOn(plot, Name("psw" + name), Slice(sample, m), ProjWData(sample, combData),
+                  Components(compstr("sigx,sbx,swx", m)),
                   DrawOption("LF"), FillStyle(1001), FillColor(color::aurora4),
                   LineColor(color::aurora4));
     simPdf.plotOn(plot, Name("psb" + name), Slice(sample, m),
-                  ProjWData(sample, combData), Components("sigx,sbx"),
+                  ProjWData(sample, combData), Components(compstr("sigx,sbx", m)),
                   DrawOption("LF"), FillStyle(1001), FillColor(color::aurora2),
                   LineColor(color::aurora2));
     simPdf.plotOn(plot, Name("psig" + name), Slice(sample, m),
-                  ProjWData(sample, combData), Components(sigx),
+                  ProjWData(sample, combData), Components(compstr("sigx", m)),
                   DrawOption("LF"), FillStyle(1001), FillColor(color::aurora0),
                   LineColor(color::aurora0));
     simPdf.plotOn(plot, Name("pbkg" + name), Slice(sample, m),
-                  ProjWData(sample, combData), Components(bkgx),
+                  ProjWData(sample, combData), Components(compstr("bkgx", m)),
                   LineStyle(2), LineColor(color::frost2));
     simPdf.plotOn(plot, Name("pswp" + name), Slice(sample, m),
-                  ProjWData(sample, combData), Components(swp), LineStyle(1),
-                  DrawOption("LF"), FillStyle(3005), FillColor(color::frost0),
-                  LineColor(color::frost0));
+                  ProjWData(sample, combData), Components(compstr("swpx", m)),
+                  LineStyle(1), DrawOption("LF"), FillStyle(3005),
+                  FillColor(color::frost0), LineColor(color::frost0));
     plot->Draw();
 
     float x1 = 0.68, x2 = 0.89, y1 = 0.68, y2 = 0.88;
