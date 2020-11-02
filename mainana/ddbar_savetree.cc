@@ -15,8 +15,20 @@
 #include "xjjcuti.h"
 #include "xjjrootuti.h"
 
+#ifdef SYSTEM_PBPB
+
 #include "dtree.h"
 #include "ddbar.h"
+#include "event_mixer.h"
+
+#endif 
+#ifdef SYSTEM_PP
+
+#include "dtree_pp.h"
+#include "ddbar_pp.h"
+#include "event_mixer_pp.h"
+
+#endif
 
 const int event_cutoff = (int) 1e10;
 const float dmass_min = 1.72;
@@ -39,12 +51,12 @@ unsigned centralityID(int centrality) {
   return id - 1;
 }
 
-void ddbar_saveDpair(std::string inputdata, std::string inputmc,
+void ddbar_saveDpair(std::string inputdata, std::string inputmc, std::string inputmixdata,
                      std::string output, std::string inputeff, float pt1min,
                      float pt1max, float pt2min, float pt2max, float dy,
                      float centmin, float centmax, std::string option = "2pi",
                      std::string treename = "d0ana/VertexCompositeNtuple") {
-
+std::cout << "am alive\n";
   ddbar::binning *binfo = new ddbar::binning(option);
   // TFile *infmc = TFile::Open(inputmc.c_str());
 
@@ -55,12 +67,15 @@ void ddbar_saveDpair(std::string inputdata, std::string inputmc,
     ineff->GetObject<TH2D>("efficiency_" + centralityString(i), eff[i]);
   }
 
-  TFile *infdata = TFile::Open(inputdata.c_str());
-  ddtree::dtree *dnt = new ddtree::dtree(infdata, treename);
+  TFile* infdata = TFile::Open(inputdata.c_str());
+  ddtree::dtree *dnt = new ddtree::dtree(infdata,treename.c_str());
+
+  TFile* infmix = TFile::Open(inputmixdata.c_str());
+  ddtree::dtree *mdt = new ddtree::dtree(infmix,treename.c_str());
+  EventMixer mixer(mdt);
 
   std::string outputname = "rootfiles/" + output + "/dptree.root";
   xjjroot::mkdir(outputname.c_str());
-  TFile *outf = new TFile(outputname.c_str(), "recreate");
   Int_t iPhi;
   Float_t m1; // mass of D0
   Float_t m2; // mass of D0bar
@@ -69,7 +84,25 @@ void ddbar_saveDpair(std::string inputdata, std::string inputmc,
   Float_t weight, weightErr;
   Float_t dphi;
 
-  TTree* dmptree = new TTree("dmass", "D0 mass pairs");
+  Int_t iPhi_sm;
+  Float_t m1_sm;
+  Float_t m2_sm;
+  Float_t y1_sm;
+  Float_t y2_sm;
+  Float_t weight_sm, weightErr_sm;
+  Float_t dphi_sm;
+
+  Int_t iPhi_mm;
+  Float_t m1_mm;
+  Float_t m2_mm;
+  Float_t y1_mm;
+  Float_t y2_mm;
+  Float_t weight_mm, weightErr_mm;
+  Float_t dphi_mm;
+
+  TFile *outf = new TFile(outputname.c_str(), "RECREATE");
+
+  TTree* dmptree = new TTree("dmass", "D0 mass pairs (signal+signal)");
   dmptree->Branch("m1", &m1, "m1/F");
   dmptree->Branch("m2", &m2, "m2/F");
   dmptree->Branch("weight", &weight, "weight/F");
@@ -79,35 +112,70 @@ void ddbar_saveDpair(std::string inputdata, std::string inputmc,
   dmptree->Branch("y1", &y1, "y1/F");
   dmptree->Branch("y2", &y2, "y2/F");
 
+  TTree* dmptree_sigmix = new TTree("dmass_sigmix", "D0 mass (signal+mixed)");
+  dmptree_sigmix->SetDirectory(outf);
+  dmptree_sigmix->Branch("m1", &m1_sm, "m1/F");
+  dmptree_sigmix->Branch("m2", &m2_sm, "m2/F");
+  dmptree_sigmix->Branch("weight", &weight_sm, "weight/F");
+  dmptree_sigmix->Branch("weightErr", &weightErr_sm, "weightErr/F");
+  dmptree_sigmix->Branch("iPhi", &iPhi_sm, "iPhi/I");
+  dmptree_sigmix->Branch("dphi", &dphi_sm, "dphi/F");
+  dmptree_sigmix->Branch("y1", &y1_sm, "y1/F");
+  dmptree_sigmix->Branch("y2", &y2_sm, "y2/F");
+  
+  TTree* dmptree_mixmix = new TTree("dmass_mixmix", "D0 mass (mixed+mixed)");
+  dmptree_mixmix->SetDirectory(outf);
+  dmptree_mixmix->Branch("m1", &m1_mm, "m1/F");
+  dmptree_mixmix->Branch("m2", &m2_mm, "m2/F");
+  dmptree_mixmix->Branch("weight", &weight_mm, "weight/F");
+  dmptree_mixmix->Branch("weightErr", &weightErr_mm, "weightErr/F");
+  dmptree_mixmix->Branch("iPhi", &iPhi_mm, "iPhi/I");
+  dmptree_mixmix->Branch("dphi", &dphi_mm, "dphi/F");
+  dmptree_mixmix->Branch("y1", &y1_mm, "y1/F");
+  dmptree_mixmix->Branch("y2", &y2_mm, "y2/F");
+  
+  std::vector<float> cents = {0, 30, 50, 80};
+  std::vector<ddtree::mvas*> mvacents(cents.size()-1);
+  for(int l=0; l<cents.size()-1; l++)
+    { mvacents[l] = new ddtree::mvas(Form("DntupleRun2018/mvas/BDTCuts_finePtBins_PrompD0_PbPb_cent%.0fto%.0f_trkPt1GeV.root", cents[l], cents[l+1]),Form("cent%.0fto%.0f", cents[l], cents[l+1])); }
+
   // Event loop
-  // int nthreads = 1;
-  // ROOT::EnableImplicitMT(nthreads);
+  //int nthreads = 1;
+  //ROOT::EnableImplicitMT(nthreads);
   int nentries = dnt->nt()->GetEntries();
   if (nentries >= event_cutoff) {
     std::cout << "[Warning] Limited to " << event_cutoff << "events"
               << "\n";
   }
+  
   for (int iEvt = 0; iEvt < nentries; iEvt++) {
     if (iEvt >= event_cutoff)
       break;
-    if (iEvt % 100000 == 0)
+    if (iEvt % 10000 == 0)
       xjjc::progressbar(iEvt, nentries);
     dnt->nt()->GetEntry(iEvt);
+#ifdef SYSTEM_PBPB
     if (dnt->centrality > centmax * 2 || dnt->centrality < centmin * 2)
       continue;
 
-    // unsigned centID = centralityID(dnt->centrality);
+    ddtree::dtree *mixtree = mixer.findSimilarEvent(dnt->centrality,dnt->bestvtxZ,iEvt);
+
+    unsigned centID = centralityID(dnt->centrality);
+    unsigned mixcentID = centralityID(mixtree->centrality);
+#endif
+
+#ifdef SYSTEM_PP
+    ddtree::dtree *mixtree = mixer.findSimilarEvent(dnt->bestvtxZ,iEvt);
+#endif
     for (int j = 0; j < dnt->candSize; j++) {
       float pT1 = dnt->pT[j];
       if (pT1 < pt1min || pT1 > pt1max || fabs(dnt->y[j]) > dy) continue;
-      for (int l = 0; l < j; l++) {
+      for (int l = 0; l < dnt->candSize; l++) {
         float pT2 = dnt->pT[l];
-        if (pT2 < pt1min || pT2 > pt1max || fabs(dnt->y[l]) > dy) continue;
-        if (dnt->flavor[l] * dnt->flavor[j] > 0) {
-          continue;
-        } else if (fabs(pT1 - pT2) < 1e-4 && fabs(dnt->phi[j] - dnt->phi[l]) < 1e-4) {
-          continue;
-        }
+        if (pT2 < pt2min || pT2 > pt2max || fabs(dnt->y[l]) > dy) continue;
+        if (pT2 > pt1min && l > j) continue;
+        if (dnt->flavor[l] * dnt->flavor[j] > 0) continue;
+        if (fabs(pT1 - pT2) < 1e-4 && fabs(dnt->phi[j] - dnt->phi[l]) < 1e-4) continue;
 
         int im1;
         int im2;
@@ -128,33 +196,115 @@ void ddbar_saveDpair(std::string inputdata, std::string inputmc,
           std::cout << __FUNCTION__ << ": error: invalid dphi calculated."
                     << std::endl;
         }
-        // double scale1 =
-        //     1. / eff[centID]->GetBinContent(eff[centID]->FindBin(pT1, phi1));
-        // double scale2 =
-        //     1. / eff[centID]->GetBinContent(eff[centID]->FindBin(pT2, phi2));
-        // double error1 =
-        //     eff[centID]->GetBinError(eff[centID]->FindBin(pT1, phi1)) * scale1 *
-        //     scale1;
-        // double error2 =
-        //     eff[centID]->GetBinError(eff[centID]->FindBin(pT2, phi2)) * scale2 *
-        //     scale2;
-        // weight = scale1 * scale2;
-        // weightErr = error1 * error2;
+#ifdef SYSTEM_PBPB
+         //double scale1 =
+         //    1. / eff[centID]->GetBinContent(eff[centID]->FindBin(pT1, phi1));
+         //double scale2 =
+         //    1. / eff[centID]->GetBinContent(eff[centID]->FindBin(pT2, phi2));
+         //double error1 =
+         //    eff[centID]->GetBinError(eff[centID]->FindBin(pT1, phi1)) * scale1 *
+         //    scale1;
+         //double error2 =
+         //    eff[centID]->GetBinError(eff[centID]->FindBin(pT2, phi2)) * scale2 *
+         //    scale2;
+         //weight = scale1 * scale2;
+         //weightErr = error1 * error2;
+#endif
         dmptree->Fill();
+      }
+      for(int m = 0; m < mixtree->candSize; m++) {
+        float pT2 = dnt->pT[m];
+        if (pT2 < pt2min || pT2 > pt2max || fabs(mixtree->y[m]) > dy) continue;
+        if (pT2 > pt1min && m > j) continue;
+        if (mixtree->flavor[m] * dnt->flavor[j] > 0) continue;
+        if (fabs(pT1 - pT2) < 1e-4 && fabs(dnt->phi[j] - mixtree->phi[m]) < 1e-4) continue;
+#ifdef SYSTEM_PBPB
+        if(mixcentID<cents.size()-1 && !mvacents[mixcentID]->passmva(mixtree->pT[m], mixtree->mva[m])) continue;
+#endif
+
+        iPhi_sm = -1;
+        if (dnt->flavor[j] > 0) {
+          dphi_sm = binfo->getdphi(dnt->phi[j],mixtree->phi[m],iPhi_sm);
+          m1_sm = dnt->mass[j];
+          y1_sm = dnt->y[j];
+          m2_sm = mixtree->mass[m];
+          y2_sm = mixtree->y[m];
+        } else {
+          dphi_sm = binfo->getdphi(mixtree->phi[m],dnt->phi[j],iPhi_sm);
+          m1_sm = mixtree->mass[m];
+          y1_sm = mixtree->y[m];
+          m2_sm = dnt->mass[j];
+          y2_sm = dnt->y[j];
+        }
+        if (iPhi_sm < 0) {
+          std::cout << __FUNCTION__ << ": error: invalid dphi calculated."
+                    << std::endl;
+        }
+        dmptree_sigmix->Fill();
+      }
+    }
+    for(int n = 0; n < mixtree->candSize; n++) {
+      float pT1 = mixtree->pT[n];
+      if (pT1 < pt1min || pT1 > pt1max || fabs(mixtree->y[n]) > dy) continue;
+#ifdef SYSTEM_PBPB
+      if(mixcentID<cents.size()-1 && !mvacents[mixcentID]->passmva(mixtree->pT[n], mixtree->mva[n])) continue;
+#endif
+      for (int m = 0; m < mixtree->candSize; m++) {
+        float pT2 = mixtree->pT[m];
+        if (pT2 < pt2min || pT2 > pt2max || fabs(mixtree->y[m]) > dy) continue;
+        if (pT2 > pt1min && m > n) continue;
+        if (mixtree->flavor[n] * mixtree->flavor[m] > 0) continue;
+        if (fabs(pT1 - pT2) < 1e-4 && fabs(mixtree->phi[n] - mixtree->phi[m]) < 1e-4) continue;
+#ifdef SYSTEM_PBPB
+        if(mixcentID<cents.size()-1 && !mvacents[mixcentID]->passmva(mixtree->pT[m], mixtree->mva[m])) continue;
+#endif
+        int im1;
+        int im2;
+        iPhi_mm = -1;
+        if (mixtree->flavor[n] > 0) {
+          im1 = n;
+          im2 = m;
+        } else {
+          im1 = m;
+          im2 = n;
+        }
+        dphi_mm = binfo->getdphi(dnt->phi[im1], dnt->phi[im2], iPhi_mm);
+        m1_mm = dnt->mass[im1];
+        m2_mm = dnt->mass[im2];
+        y1_mm = dnt->y[im1];
+        y2_mm = dnt->y[im2];
+        if (iPhi_mm < 0) {
+          std::cout << __FUNCTION__ << ": error: invalid dphi calculated."
+                    << std::endl;
+        }
+        dmptree_mixmix->Fill();
       }
     }
   }
   outf->cd();
   dmptree->Write();
-  binfo->write();
+  dmptree_sigmix->Write();
+  dmptree_mixmix->Write();
   outf->Close();
 }
 
+bool CheckValue(ROOT::Internal::TTreeReaderValueBase& value) {
+   if (value.GetSetupStatus() < 0) {
+      std::cerr << "Error " << value.GetSetupStatus()
+                << "setting up reader for " << value.GetBranchName() << '\n';
+      return false;
+   }
+   return true;
+}
 
 void ddbar_swapmc(std::string swapmc, std::string output, std::string inputeff,
                   float ptmin, float ptmax,
                   float dy, float centmin, float centmax, std::string option = "2pi")
 {
+  std::cout << "entering swapmc\n";
+  std::cout << "using file " << swapmc << "\n";
+  std::cout << "centmin: " << centmin << "\n";
+  std::cout << "centmax: " << centmax << "\n";
   ddbar::binning *binfo = new ddbar::binning(option);
 
   TFile *infmc = TFile::Open(swapmc.c_str());
@@ -172,14 +322,14 @@ void ddbar_swapmc(std::string swapmc, std::string output, std::string inputeff,
   TTreeReaderArray<Float_t> ptd2(reader, "pTD2");
   TTreeReaderArray<Float_t> etad1(reader, "EtaD1");
   TTreeReaderArray<Float_t> etad2(reader, "EtaD2");
-
+  std::cout << "got readers\n";
   // Get D0 efficiency from MC
   TFile *ineff = TFile::Open(inputeff.c_str());
   std::vector<TH2D *> eff(nCentrality);
   for (unsigned i = 0; i < nCentrality; ++i) {
     eff[i] = (TH2D *)ineff->Get("efficiency_" + centralityString(i));
   }
-
+  std::cout << "got eff\n";
   std::string outputname = "rootfiles/" + output + "/swaptree.root";
   xjjroot::mkdir(outputname.c_str());
   TFile *outf = new TFile(outputname.c_str(), "recreate");
@@ -218,13 +368,17 @@ void ddbar_swapmc(std::string swapmc, std::string output, std::string inputeff,
   TH1I *nCand = new TH1I(
       "nCand", "nCand;# of gen D(#bar{D}) candidates; Events", 10, 0, 10);
   
-
+  std::cout << "started loop\n";
+  std::cout << "entries: " << reader.GetEntries() << "\n";
 // traverse the events
-  while (reader.Next()) {
+//  while (reader.Next()) {
+  for(size_t i=0;i<reader.GetEntries();i++){
+    reader.Next();
+    reader.GetTree()->GetEntry(i);
+    if(i%10000==0) std::cout << "Entry " << i << "/" << reader.GetEntries() << "\n";
     if (*centrality > centmax * 2 || *centrality < centmin * 2) {
       continue;
     }
-
     int size = 0;
     for (unsigned iGen = 0; iGen < da1.GetSize(); ++iGen) {
       if (da1[iGen] == 321 && da2[iGen] == 211) {
@@ -237,11 +391,11 @@ void ddbar_swapmc(std::string swapmc, std::string output, std::string inputeff,
       if (pT[iCand] < ptmin || pT[iCand] > ptmax || fabs(y[iCand]) > dy) {
         continue;
       }
-      // float pT1 = pT[iCand];
-      // float phi1 = phi[iCand];
+       float pT1 = pT[iCand];
+       float phi1 = phi[iCand];
       for (unsigned jCand = 0; jCand < iCand; ++jCand) {
-        // float pT2 = pT[jCand];
-        // float phi2 = phi[jCand];
+        float pT2 = pT[jCand];
+        float phi2 = phi[jCand];
         sameK = false;
         if (pT[jCand] < ptmin || pT[jCand] > ptmax || fabs(y[jCand]) > dy) {
           continue;
@@ -282,7 +436,9 @@ void ddbar_swapmc(std::string swapmc, std::string output, std::string inputeff,
         eta1da2 = etad2[i1];
         eta2da1 = etad1[i2];
         eta2da2 = etad2[i2];
+#ifdef SYSTEM_PBPB
         // weight = scale;
+#endif
         if (iPhi < 0) {
           std::cout << __FUNCTION__ << ": error: invalid dphi calculated."
                     << std::endl;
@@ -299,16 +455,17 @@ void ddbar_swapmc(std::string swapmc, std::string output, std::string inputeff,
         }
         swaptree->Fill();
       }
-      // unsigned centID = centralityID(*centrality);
+#ifdef SYSTEM_PBPB
+      unsigned centID = centralityID(*centrality);
       // Calculate the scale factor from MC efficiency
-      // double scale = 1. /
-      // eff[centID]->GetBinContent(eff[centID]->FindBin(pT[iCand],
-      // phi[iCand]));
+      double scale = 1. /
+        eff[centID]->GetBinContent(eff[centID]->FindBin(pT[iCand],
+          phi[iCand]));
+#endif
     }
   }
   outf->cd();
   outf->Write();
-  binfo->write();
   outf->Close();
 }
 
@@ -318,13 +475,14 @@ int main(int argc, char* argv[])
     std::cerr << "Not enough number of arguments! (" << argc << ")" << "\n";
     return 1;
   }
-  ddbar_saveDpair(argv[1], argv[2], argv[3], argv[12], std::stof(argv[4]),
-                  std::stof(argv[5]), std::stof(argv[6]), std::stof(argv[7]),
-                  std::stof(argv[8]), std::stof(argv[9]), std::stof(argv[10]),
-                  argv[11]);
-  ddbar_swapmc(argv[13], argv[3], argv[12], std::stof(argv[6]),
-               std::stof(argv[7]), std::stof(argv[8]), std::stof(argv[9]),
-               std::stof(argv[10]), argv[11]);
+  ddbar_saveDpair(argv[1], argv[2], argv[3], argv[4], argv[13], std::stof(argv[5]),
+                  std::stof(argv[6]), std::stof(argv[7]), std::stof(argv[8]),
+                  std::stof(argv[9]), std::stof(argv[10]), std::stof(argv[11]),
+                  argv[12]);
+  ddbar_swapmc(argv[14], argv[4], argv[13], std::stof(argv[7]),
+               std::stof(argv[8]), std::stof(argv[9]), std::stof(argv[10]),
+               std::stof(argv[11]), argv[12]);
+  std::cout << "exited swapmc\n";
   return 0;
 }
 

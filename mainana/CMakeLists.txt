@@ -4,7 +4,7 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # add_compile_options(-Wall -Wextra -march=native -O2)
-add_compile_options(-Wall -Wextra -g -O0)
+add_compile_options(-Wall -Wextra -g -O0 -DSYSTEM_PP)
 
 list(APPEND CMAKE_PREFIX_PATH $ENV{ROOTSYS})
 find_package(ROOT 6.16 REQUIRED)
