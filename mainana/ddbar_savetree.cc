@@ -66,6 +66,8 @@ void ddbar_saveDpair(std::string inputdata, std::string inputmc,
   Float_t m2; // mass of D0bar
   Float_t y1; // mass of D0
   Float_t y2; // mass of D0bar
+  Float_t phi1, phi2; // phi angles
+  Float_t pT1, pT2;
   Float_t weight, weightErr;
   Float_t dphi;
 
@@ -78,6 +80,10 @@ void ddbar_saveDpair(std::string inputdata, std::string inputmc,
   dmptree->Branch("dphi", &dphi, "dphi/F");
   dmptree->Branch("y1", &y1, "y1/F");
   dmptree->Branch("y2", &y2, "y2/F");
+  dmptree->Branch("phi1", &phi1, "phi1/F");
+  dmptree->Branch("phi2", &phi2, "phi2/F");
+  dmptree->Branch("pT1", &pT1, "pT1/F");
+  dmptree->Branch("pT2", &pT2, "pT2/F");
 
   // Event loop
   // int nthreads = 1;
@@ -98,14 +104,14 @@ void ddbar_saveDpair(std::string inputdata, std::string inputmc,
 
     // unsigned centID = centralityID(dnt->centrality);
     for (int j = 0; j < dnt->candSize; j++) {
-      float pT1 = dnt->pT[j];
+      pT1 = dnt->pT[j];
       if (pT1 < pt1min || pT1 > pt1max || fabs(dnt->y[j]) > dy) continue;
       for (int l = 0; l < j; l++) {
-        float pT2 = dnt->pT[l];
+         pT2 = dnt->pT[l];
         if (pT2 < pt1min || pT2 > pt1max || fabs(dnt->y[l]) > dy) continue;
         if (dnt->flavor[l] * dnt->flavor[j] > 0) {
           continue;
-        } else if (fabs(pT1 - pT2) < 1e-4 && fabs(dnt->phi[j] - dnt->phi[l]) < 1e-4) {
+        } else if (fabs(dnt->pT[j] - dnt->pT[l]) < 1e-4 && fabs(dnt->phi[j] - dnt->phi[l]) < 1e-4) {
           continue;
         }
 
@@ -124,6 +130,10 @@ void ddbar_saveDpair(std::string inputdata, std::string inputmc,
         m2 = dnt->mass[im2];
         y1 = dnt->y[im1];
         y2 = dnt->y[im2];
+        pT1 = dnt->pT[im1];
+        pT2 = dnt->pT[im2];
+        phi1 = dnt->phi[im1];
+        phi2 = dnt->phi[im2];
         if (iPhi < 0) {
           std::cout << __FUNCTION__ << ": error: invalid dphi calculated."
                     << std::endl;
@@ -197,7 +207,6 @@ void ddbar_swapmc(std::string swapmc, std::string output, std::string inputeff,
   Bool_t signal;
   Bool_t isSwap1, isSwap2;
   Bool_t sameK;
-  Int_t genda1, genda2;
   Float_t pt1da1, pt1da2;
   Float_t pt2da1, pt2da2;
   Float_t pterr1da1, pterr1da2;
