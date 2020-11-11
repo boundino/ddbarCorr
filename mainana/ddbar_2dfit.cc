@@ -51,14 +51,12 @@ void ddbar_2dfit(std::string inputname, std::string swapname, std::string output
   fitter->SetOption("Y");
   std::vector<RooFitResult> status;
   for(int k=0; k<binfo->nphibin(); k++)
-  // for(int k=0; k<2; k++)
     {
       label.push_back(Form("%s < #Delta#phi/#pi < %s", xjjc::number_remove_zero(binfo->phibin()[k]).c_str(), xjjc::number_remove_zero(binfo->phibin()[k+1]).c_str()));
-      auto result = fitter->simfit(tmass, swapmass, k, "PbPb", Form("%s/idx/c%02d", outputname.c_str(), k), label);
+      auto result = fitter->fit(tmass, swapmass, k, "PbPb", Form("%s/idx/c%02d", outputname.c_str(), k), label);
       status.push_back(*result);
 
       hdphi_sub->SetBinContent(k + 1, fitter->GetY());
-      // hdphi_sub->SetBinError(k + 1, fitter->GetYE());
       hdphi_sub->SetBinError(k + 1, fitter->GetYE());
       hdphi_sub->Sumw2();
 
@@ -68,11 +66,11 @@ void ddbar_2dfit(std::string inputname, std::string swapname, std::string output
       label.pop_back();
     }
 
-  int idphi = 0;
-  for (auto i : status) {
-    std::cout << idphi++ << "\n";
-    i.Print();
-  }
+  // int idphi = 0;
+  // for (auto i : status) {
+  //   std::cout << idphi++ << "\n";
+  //   i.Print();
+  // }
   hdphi_sub_norm->Scale(1./hdphi_sub_norm->Integral("width"));
 
   hdphi_sub_norm->GetXaxis()->SetNdivisions(-504);
