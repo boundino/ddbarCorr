@@ -11,10 +11,10 @@ cmin=(   0 0 0 0 0 0 0 0 0 0)
 cmax=(   80 80 80 80 80 80 80 80 80 80)
 label=2pi
 
-inputdata=DntupleRun2018/skim_d0ana_PbPb2018_HIMinimumBias.root
+inputdata=DntupleRun2018/DDbar/skim_MB/skim_d0ana_PbPb2018_HIMinimumBias.root
 inputmc=rootfiles/masstpl_PbPb.root
-genmc=DntupleRun2018/skim_mc_analysisTree_promptD0_official.root
-swapmc=DntupleRun2018/mc_analysisTree_promptD0_official.root
+genmc=DntupleRun2018/DDbar/skim_mc_analysisTree_promptD0_official.root
+swapmc=DntupleRun2018/DDbar/mc_analysisTree_promptD0_official.root
 eff=rootfiles/efficiency.root
 
 dpairtree=dptree.root
