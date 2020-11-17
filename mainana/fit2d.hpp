@@ -28,7 +28,6 @@
  *                                                                                        *
  ******************************************************************************************/
 
-#include "TF1.h"
 #include "TH1.h"
 #include "TString.h"
 #include "TLine.h"
@@ -86,12 +85,6 @@ namespace xjjroot
     Double_t GetNDF() const {return NDF;}
     Double_t GetChi2Prob() const {return Chi2Prob;}
 
-    TF1* GetFun_f(TString name="Fun_f") const {if(!fparamfuns){return 0;} return clonefun(fun_f, name);}
-    TF1* GetFun_mass(TString name="Fun_mass") const {if(!fparamfuns){return 0;} return clonefun(fun_mass, name);}
-    TF1* GetFun_swap(TString name="Fun_swap") const {if(!fparamfuns){return 0;} return clonefun(fun_swap, name);}
-    TF1* GetFun_background(TString name="Fun_background") const {if(!fparamfuns){return 0;} return clonefun(fun_background, name);}
-    TF1* GetFun_not_mass(TString name="Fun_not_mass") const {if(!fparamfuns){return 0;} return clonefun(fun_not_mass, name);}
-
     void SetOption(Option_t* option="") {foption = option; resolveoption();}
     void SetSignalregion(Double_t d_mass_signal_) {d_mass_signal =  d_mass_signal_; calvar();}
     void SetSidebandL(Double_t d_mass_sideband_l_) {d_mass_sideband_l = d_mass_sideband_l_; calvar();}
@@ -113,12 +106,6 @@ namespace xjjroot
     Double_t NDF;
     Double_t Chi2Prob;
     Double_t sidebandScale;
-
-    TF1* fun_f;
-    TF1* fun_mass;
-    TF1* fun_swap;
-    TF1* fun_background;
-    TF1* fun_not_mass;
 
     TFitResultPtr r;
 
@@ -178,7 +165,6 @@ namespace xjjroot
     void setfunparameters();
     void setfunstyle();
 
-    TF1* clonefun(const TF1* fun, TString fun_name) const;
     void sethist(TH1* h) const;
     void drawCMS(TString collision, TString snn="5.02") const;
     void drawtex(Double_t x, Double_t y, const char* text, Float_t tsize=0.04, Short_t align=12, int color=kBlack) const;

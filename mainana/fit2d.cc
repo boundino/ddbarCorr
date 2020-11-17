@@ -231,6 +231,7 @@ RooFitResult* xjjroot::fit2d::fit(
 
   std::vector<std::vector<double> > yields(ptbins.size() - 1);
   std::vector<std::vector<double> > yieldErrs(ptbins.size() - 1);
+  std::vector<std::vector<double>> notsigs(ptbins.size() - 1);
   std::vector<std::array<double, 2> > failed;
   RooFitResult *r_ml_wgt_corr;
   // 2D fit
@@ -253,6 +254,7 @@ RooFitResult* xjjroot::fit2d::fit(
       if (num_max == 0) {
         yields[xpt].push_back(0);
         yieldErrs[xpt].push_back(0);
+        notsigs[xpt].push_back(0);
         continue;
       }
       // Initially, Nsig is set to 3% of the total entries, and Nswap = Nsig.
@@ -290,6 +292,7 @@ RooFitResult* xjjroot::fit2d::fit(
       // Record yields and error
       yields[xpt].push_back(nss.getValV());
       yieldErrs[xpt].push_back(nss.getError());
+      notsigs[xpt].push_back(nsb.getValV() + nbs.getValV() + nbb.getValV());
 
       // Cut ranges for N - 1 plots
       m1.setRange("signal_box_m1", min_fit_dzero, max_hist_dzero);
@@ -420,7 +423,6 @@ RooFitResult* xjjroot::fit2d::fit(
                      other.Data(), mass_dzero_signal_h));
         if (fdrawyield) {
           drawtex(texxpos, texypos = (texypos - texdypos),
-                  // Form("N = %.0f #pm %.0f", yields[xpt][ypt], yieldErrs[xpt][ypt]));
                   Form("N = %.0f #pm %.0f", nss.getValV(), nss.getError()));
         }
         // Add pt range onto the plots
@@ -464,6 +466,11 @@ RooFitResult* xjjroot::fit2d::fit(
     }
     yieldErr = std::sqrt(yieldErr);
 
+    S = yield;
+    B = std::accumulate(
+        notsigs.cbegin(), notsigs.cend(), 0, [](auto lhs, const auto &rhs) {
+          return std::accumulate(rhs.cbegin(), rhs.cend(), lhs);
+        });
     std::cout << "++++++++ failed pt bins for dphi " << iBin << "++++++++++" << "\n";
     for (auto fit : failed) {
       std::cout << "pt1 " << fit[0] << ", pt2 " << fit[1] << "\n";
@@ -931,13 +938,8 @@ void xjjroot::fit2d::calvar()
   mass_dzero_sideband_h_n = mass_dzero - d_mass_sideband_h;
 
   if(!fparamfuns) return;
-  S = fun_mass->Integral(mass_dzero_signal_l,mass_dzero_signal_h)/binwid_hist_dzero;
-  B = fun_background->Integral(mass_dzero_signal_l,mass_dzero_signal_h)/binwid_hist_dzero + fun_swap->Integral(mass_dzero_signal_h,mass_dzero_signal_h)/binwid_hist_dzero;
   Sig = S/TMath::Sqrt(S+B);
-  // yield = fun_mass->Integral(min_hist_dzero,max_hist_dzero)/binwid_hist_dzero;
-  // yieldErr = fun_mass->Integral(min_hist_dzero,max_hist_dzero)/binwid_hist_dzero*fun_mass->GetParError(0)/fun_mass->GetParameter(0);
   Chi2 = 2.*r->MinFcnValue();
-  NDF = fun_f->GetNDF();
   Chi2Prob = TMath::Prob(Chi2,NDF);
 }
 
@@ -965,23 +967,6 @@ void xjjroot::fit2d::sethist(TH1* h) const
   h->SetMarkerSize(0.8);
   h->SetMarkerStyle(20);
   h->SetStats(0);
-}
-
-void xjjroot::fit2d::drawleg(TH1* h) const
-{
-  TLegend* leg = new TLegend(0.65, 0.58, 0.85, 0.88, NULL,"brNDC");
-  leg->SetBorderSize(0);
-  leg->SetFillStyle(0);
-  leg->SetTextFont(42);
-  leg->SetTextSize(0.04);
-
-  leg->AddEntry(h,"Data", "pl");
-  leg->AddEntry(fun_f,"Fit", "l");
-  leg->AddEntry(fun_mass,"D^{0}+#bar{D^{#lower[0.2]{0}}} Signal", "f");
-  leg->AddEntry(fun_swap,"K-#pi swapped", "f");
-  leg->AddEntry(fun_background,"Combinatorial", "l");
-
-  leg->Draw("same");
 }
 
 void xjjroot::fit2d::drawCMS(TString collision, TString snn/*="5.02"*/) const
