@@ -46,9 +46,9 @@ void xjjroot::fit2d::resolveoption()
   @param swaptree   TTree*  tree containing D0 mass and weight from swapped K pi
   @param iBin    int     ID of delta phi bin
 */
-RooFitResult* xjjroot::fit2d::fit(
-    const int iBin,
-    TString collisionsyst /*=""*/, TString outputname /*="cmass"*/,
+void xjjroot::fit2d::fit(
+    const int iBin, TString collisionsyst /*=""*/,
+    TString outputname /*="cmass"*/,
     const std::vector<TString> &vtex /*=std::vector<TString>()*/) {
   reset();
   init();
@@ -66,17 +66,18 @@ RooFitResult* xjjroot::fit2d::fit(
   m2.setRange("D0range", min_fit_dzero, max_hist_dzero);
 
   // select the dphi bin in question
-  RooDataSet ds = *(RooDataSet *)total_ds.reduce(
-      RooArgSet(m1, m2, pT1, pT2), Form("iPhi == %i", iBin));
+  RooDataSet ds = *(RooDataSet *)total_ds.reduce(RooArgSet(m1, m2, pT1, pT2),
+                                                 Form("iPhi == %i", iBin));
 
   // Divide the data into pt bins
   using dsvec = std::vector<RooDataSet *>;
   std::vector<dsvec> dsets(ptbins.size() - 1, dsvec(ptbins.size() - 1));
   for (unsigned i = 0; i < ptbins.size() - 1; ++i) {
     for (unsigned j = 0; j < ptbins.size() - 1; ++j) {
-      std::array<double, 3> ptvec = {(double)iBin, ptbins[i], ptbins[j] };
+      std::array<double, 3> ptvec = {(double)iBin, ptbins[i], ptbins[j]};
       if (skiptobins.size() > 0 &&
-          std::find(skiptobins.cbegin(), skiptobins.cend(), ptvec) == skiptobins.end()) {
+          std::find(skiptobins.cbegin(), skiptobins.cend(), ptvec) ==
+              skiptobins.end()) {
         continue;
       }
       dsets[i][j] = (RooDataSet *)ds.reduce(
@@ -112,7 +113,8 @@ RooFitResult* xjjroot::fit2d::fit(
 
   // Double gaussian as signal p.d.f.
   // Fix the mean at D0 mass
-  RooRealVar mean("mean", "mean of gaussians", mass_dzero, mass_dzero - 0.01, mass_dzero + 0.01);
+  RooRealVar mean("mean", "mean of gaussians", mass_dzero, mass_dzero - 0.01,
+                  mass_dzero + 0.01);
   RooRealVar sigma1x("sigma1x", "width of gaussians", 0.04, 0.011, 0.15);
   RooRealVar sigma2x("sigma2x", "width of gaussians", 0.01, 0.001, 0.011);
   RooGaussian sig1x("sig1x", "Signal component 1", m1, mean, sigma1x);
@@ -144,7 +146,8 @@ RooFitResult* xjjroot::fit2d::fit(
   RooProdPdf swapped("swapped", "background PDF", RooArgSet(swpx, swpy));
 
   // Sum the signal components into a composite signal p.d.f.
-  RooRealVar sigfracx("sigfracx", "fraction of component 1 in signal", 0.5, 0.001, 0.999);
+  RooRealVar sigfracx("sigfracx", "fraction of component 1 in signal", 0.5,
+                      0.001, 0.999);
   RooAddPdf sigx("sigx", "Signal", RooArgList(sig1x, sig2x), sigfracx);
   RooRealVar sigfracy("sigfracy", "fraction of component 1 in signal", 0.5,
                       0.001, 0.999);
@@ -204,17 +207,19 @@ RooFitResult* xjjroot::fit2d::fit(
                  ShowConstants(false));
     frameswpy->Draw();
     pttex->Draw();
-    canv->SaveAs(outputname +
-                 Form("_swapfitm2_%.1f_%.1f.pdf", ptbins[ipt], ptbins[ipt + 1]));
+    canv->SaveAs(outputname + Form("_swapfitm2_%.1f_%.1f.pdf", ptbins[ipt],
+                                   ptbins[ipt + 1]));
   }
 
-  std::vector<RooRealVar *> fixed_pars =
-    {&sigma1x, &sigma2x, &sigfracx, &sigmasx, &sigma1y, &sigma2y, &sigfracy, &sigmasy};
+  std::vector<RooRealVar *> fixed_pars = {&sigma1x,  &sigma2x, &sigfracx,
+                                          &sigmasx,  &sigma1y, &sigma2y,
+                                          &sigfracy, &sigmasy};
 
-  std::vector<std::vector<double> > yields(ptbins.size() - 1);
-  std::vector<std::vector<double> > yieldErrs(ptbins.size() - 1);
-  std::vector<std::vector<double>> notsigs(ptbins.size() - 1);
-  std::vector<std::array<double, 2> > failed;
+  using vec2d = std::vector<std::vector<double>>;
+  vec2d yields(ptbins.size() - 1);
+  vec2d yieldErrs(ptbins.size() - 1);
+  vec2d notsigs(ptbins.size() - 1);
+  std::vector<std::array<double, 2>> failed;
   RooFitResult *r_ml_wgt_corr;
   // 2D fit
   for (unsigned xpt = 0; xpt < ptbins.size() - 1; ++xpt) {
@@ -286,190 +291,236 @@ RooFitResult* xjjroot::fit2d::fit(
       yieldErrs[xpt].push_back(nss.getError());
       notsigs[xpt].push_back(nsb.getValV() + nbs.getValV() + nbb.getValV());
 
-      // Cut ranges for N - 1 plots
-      m1.setRange("signal_box_m1", min_fit_dzero, max_hist_dzero);
-      m2.setRange("signal_box_m1", mass_dzero_signal_l, mass_dzero_signal_h);
-
-      m1.setRange("signal_box_m2", mass_dzero_signal_l, mass_dzero_signal_h);
-      m2.setRange("signal_box_m2", min_fit_dzero, max_hist_dzero);
-
-      std::vector<RooRealVar> dim = {m1, m2};
-      std::vector<TString> dzerotex = {"D^{0}", "#bar{D^{#lower[0.2]{0}}}"};
-
-      // Produce string including multiple components with correct order
-      auto compstr = [](TString name, TString thisdim,
-                        std::initializer_list<TString> thatdim) {
-        TString str;
-        for (auto i : thatdim) {
-          if (name == "m1") {
-            str += thisdim + i + ",";
-          } else {
-            str += i + thisdim + ",";
-          }
-        }
-        str.Remove(str.Length() - 1);
-        return str;
-      };
-
-      // Plot data and fitting for D and Dbar
-      for (auto m : dim) {
-        TString name(m.GetName());
-        RooPlot *plot = m.frame(Title(name + "_plot"), Bins(60));
-        dataset.plotOn(plot, Name("pdat" + name),
-                       CutRange("signal_box_" + name));
-        model.plotOn(plot, ProjectionRange("signal_box_" + name),
-                     VisualizeError(*r_ml_wgt_corr));
-        dataset.plotOn(plot, Name("pdat" + name),
-                       CutRange("signal_box_" + name),
-                       DataError(RooAbsData::SumW2));
-        model.plotOn(plot, Name("pfit" + name),
-                     ProjectionRange("signal_box_" + name));
-        model.plotOn(
-            plot, Name("psig3" + name), ProjectionRange("signal_box_" + name),
-            // Components(compstr(name, "sig", {"sig", "swp", "bkg"})),
-            Components(compstr(name, "sig", {"bkg"})),
-            DrawOption("LF"), FillStyle(3002), FillColor(color::aurora4),
-            LineStyle(2), LineColor(color::aurora4));
-        model.plotOn(
-            plot, Name("psig2" + name), ProjectionRange("signal_box_" + name),
-            Components(compstr(name, "sig", {"swp"})), DrawOption("LF"),
-            FillStyle(3002), FillColor(color::aurora2), LineStyle(2),
-            LineColor(color::aurora2));
-        model.plotOn(
-            plot, Name("psig" + name), ProjectionRange("signal_box_" + name),
-            Components("sigsig"), DrawOption("LF"), FillStyle(3002),
-            FillColor(color::aurora0), LineStyle(2), LineColor(color::aurora0));
-        model.plotOn(plot, Name("pbkg3" + name),
-                     ProjectionRange("signal_box_" + name),
-                     Components(compstr(name, "bkg", {"bkg"})),
-                     LineStyle(2), LineColor(color::frost3));
-        model.plotOn(plot, Name("pbkg2" + name),
-                     ProjectionRange("signal_box_" + name),
-                     Components(compstr(name, "bkg", {"swp"})),
-                     LineStyle(2), LineColor(color::frost2));
-        model.plotOn(plot, Name("pbkg" + name),
-                     ProjectionRange("signal_box_" + name),
-                     Components(compstr(name, "bkg", {"sig"})),
-                     LineStyle(2), LineColor(color::frost0));
-        model.plotOn(plot, Name("pswp3" + name),
-                     ProjectionRange("signal_box_" + name),
-                     Components(compstr(name, "swp", {"bkg"})),
-                     DrawOption("LF"), FillStyle(3005), FillColor(color::night0),
-                     LineStyle(1), LineColor(color::night1));
-        model.plotOn(plot, Name("pswp2" + name),
-                     ProjectionRange("signal_box_" + name),
-                     Components(compstr(name, "swp", {"swp"})),
-                     DrawOption("LF"), FillStyle(3005), FillColor(color::night1),
-                     LineStyle(1), LineColor(color::night2));
-        model.plotOn(plot, Name("pswp" + name),
-                     ProjectionRange("signal_box_" + name),
-                     Components(compstr(name, "swp", {"sig"})),
-                     DrawOption("LF"), FillStyle(3005), FillColor(color::night2),
-                     LineStyle(1), LineColor(color::night3));
-        plot->Draw();
-
-        TLegend *leg = new TLegend(0.69, 0.18, 0.89, 0.78, NULL, "brNDC");
-        leg->SetBorderSize(0);
-        leg->SetFillStyle(0);
-        leg->SetTextFont(42);
-        leg->SetTextSize(0.04);
-
-        leg->AddEntry("pdat" + name, "Data", "pl");
-        leg->AddEntry("pfit" + name, "Fit", "l");
-
-        auto make_legend =
-            [dzerotex](TString name, TString thisdim, TString thatdim) {
-              TString str;
-              if (name == "m1") {
-                str = dzerotex[0] + thisdim + "+" + dzerotex[1] + thatdim;
-              } else {
-                str = dzerotex[0] + thatdim + "+" + dzerotex[1] + thisdim;
-              }
-              return str;
-            };
-
-        leg->AddEntry("psig3" + name, make_legend(name, "sig", "bkg"), "f");
-        leg->AddEntry("psig2" + name, make_legend(name, "sig", "swap"), "f");
-        leg->AddEntry("psig" + name, make_legend(name, "sig", "sig"), "f");
-        leg->AddEntry("pswp3" + name, make_legend(name, "swap", "bkg"), "f");
-        leg->AddEntry("pswp2" + name, make_legend(name, "swap", "swap"), "f");
-        leg->AddEntry("pswp" + name, make_legend(name, "swp", "sig"), "f");
-        leg->AddEntry("pbkg3" + name, make_legend(name, "bkg", "bkg"), "l");
-        leg->AddEntry("pbkg2" + name, make_legend(name, "bkg", "swap"), "l");
-        leg->AddEntry("pbkg" + name, make_legend(name, "bkg", "sig"), "l");
-
-        leg->Draw("same");
-
-        drawCMS(collisionsyst);
-
-        TString other = (name == m1.GetName()) ? "D" : "#bar{D}";
-        Float_t texxpos = 0.22, texypos = 0.55, texdypos = 0.053;
-        if (!vtex.empty()) {
-          texypos += texlinespc;
-          for (std::vector<TString>::const_iterator it = vtex.begin();
-               it != vtex.end(); it++)
-            drawtex(texxpos, texypos = (texypos - texdypos - texlinespc), *it);
-        }
-        drawtex(texxpos, texypos = (texypos - texdypos),
-                Form("(%.3f < m_{%s} < %.3f)", mass_dzero_signal_l,
-                     other.Data(), mass_dzero_signal_h));
-        if (fdrawyield) {
-          drawtex(texxpos, texypos = (texypos - texdypos),
-                  Form("N = %.0f #pm %.0f", nss.getValV(), nss.getError()));
-        }
-        // Add pt range onto the plots
-        drawtex(0.75, 0.85,
-                Form("%.1f < p_{T, D} < %.1f", ptbins[xpt], ptbins[xpt + 1]));
-        drawtex(0.75, 0.78,
-            Form("%.1f < p_{T, #bar{D}} < %.1f", ptbins[ypt], ptbins[ypt + 1]));
-
-        if (fsaveplot) {
-          canv->SaveAs(outputname + Form("_x%.1f_y%.1f_", ptbins[xpt], ptbins[ypt])
-                                         + name + ".pdf");
-        }
-      }
+      projectionPlot(model, r_ml_wgt_corr, dataset, xpt, ypt, nss, outputname ,collisionsyst, vtex);
     }
   }
+  // Fit the whole dataset without dividing pt
+  sigdsm1.push_back((RooDataSet *)swapds.reduce(RooArgSet(m1), "!isSwap1"));
+  sigdsm2.push_back((RooDataSet *)swapds.reduce(RooArgSet(m2), "!isSwap2"));
+  swapdsm1.push_back((RooDataSet *)swapds.reduce(RooArgSet(m1), "isSwap1"));
+  swapdsm2.push_back((RooDataSet *)swapds.reduce(RooArgSet(m2), "isSwap2"));
+  for (auto par : fixed_pars)
+    par->setConstant(false);
+  sigx.fitTo(*sigdsm1.back(), Range("m1_3sigma"), Save());
+  swpx.fitTo(*swapdsm1.back(), Save());
+  sigy.fitTo(*sigdsm2.back(), Range("m2_3sigma"), Save());
+  swpy.fitTo(*swapdsm2.back(), Save());
+  for (auto par : fixed_pars)
+    par->setConstant(true);
 
-    gStyle->SetPadLeftMargin(0.18);
-    gStyle->SetPadRightMargin(0.18);
-    auto canv2d = new TCanvas("Canvas2D", "Canvas", 800, 600);
-    int nbins = 27;
-    double mass_low = 1.73;
-    double mass_upp = 2.0;
-    TString ddname = Form("dd%d", iBin);
-    TH2D *dd = new TH2D(ddname, "mass; m_{D}; m_{#bar{D}}", nbins, mass_low,
-                        mass_upp, nbins, mass_low, mass_upp);
-    sigtree->Draw("m2:m1 >> " + ddname, Form("iPhi == %d", iBin));
-    dd->Draw("colorz");
-    TString dir = outputname(0, outputname.Length() - 3);
-    canv2d->SaveAs(Form("%s" + ddname + ".pdf", dir.Data()));
+  const long num_max = ds.sumEntries("", "D0range");
+  // Initially, Nsig is set to 3% of the total entries, and Nswap = Nsig.
+  RooRealVar nss("nss", "number of signal entries", 0.03 * num_max, 0 * num_max,
+                 0.2 * num_max);
+  RooRealVar nsb("nsb", "number of swapped entries", 0.06 * num_max,
+                 0.001 * num_max, 0.3 * num_max);
+  RooRealVar nbs("nbs", "number of swapped entries", 0.06 * num_max,
+                 0.001 * num_max, 0.3 * num_max);
+  RooRealVar nbb("nbb", "number of background entries", 0.9 * num_max,
+                 0.5 * num_max, 1.1 * num_max);
 
-    yield = std::accumulate(
-        yields.cbegin(), yields.cend(), 0, [](auto lhs, const auto &rhs) {
-          return std::accumulate(rhs.cbegin(), rhs.cend(), lhs);
-        });
+  RooAddPdf model("model", "composite pdf",
+                  RooArgList(sigsig, sigswp, sigbkg, swpsig, swpswp, swpbkg,
+                             bkgsig, bkgswp, bkgbkg),
+                  RooArgList(nss, nss, nsb, nss, nss, nsb, nbs, nbs, nbb));
 
-    yieldErr = 0;
-    for (auto verr: yieldErrs) {
-      for (auto err : verr) {
-        yieldErr += err * err;
-      }
+  // Unbinned ML fit
+  // Extended to get Nsig directly
+  r_ml_wgt_corr = model.fitTo(ds, Save(), Extended(kTRUE), NumCPU(8));
+  r_ml_wgt_corr->Print();
+  projectionPlot(model, r_ml_wgt_corr, ds, 0, 0, nss, outputname,
+                 collisionsyst, vtex);
+
+  gStyle->SetPadLeftMargin(0.18);
+  gStyle->SetPadRightMargin(0.18);
+  auto canv2d = new TCanvas("Canvas2D", "Canvas", 800, 600);
+  int nbins = 27;
+  double mass_low = 1.73;
+  double mass_upp = 2.0;
+  TString ddname = Form("dd%d", iBin);
+  TH2D *dd = new TH2D(ddname, "mass; m_{D}; m_{#bar{D}}", nbins, mass_low,
+                      mass_upp, nbins, mass_low, mass_upp);
+  sigtree->Draw("m2:m1 >> " + ddname, Form("iPhi == %d", iBin));
+  dd->Draw("colorz");
+  TString dir = outputname(0, outputname.Length() - 3);
+  canv2d->SaveAs(Form("%s" + ddname + ".pdf", dir.Data()));
+
+  yield = std::accumulate(
+      yields.cbegin(), yields.cend(), 0, [](auto lhs, const auto &rhs) {
+        return std::accumulate(rhs.cbegin(), rhs.cend(), lhs);
+      });
+
+  yieldErr = 0;
+  for (auto verr : yieldErrs) {
+    for (auto err : verr) {
+      yieldErr += err * err;
+    }
     }
     yieldErr = std::sqrt(yieldErr);
 
     S = yield;
-    B = std::accumulate(
-        notsigs.cbegin(), notsigs.cend(), 0, [](auto lhs, const auto &rhs) {
-          return std::accumulate(rhs.cbegin(), rhs.cend(), lhs);
-        });
-    std::cout << "++++++++ failed pt bins for dphi " << iBin << "++++++++++" << "\n";
+    B = std::accumulate(notsigs.cbegin(), notsigs.cend(), 0,
+                        [](auto lhs, const auto &rhs) {
+                          return std::accumulate(rhs.cbegin(), rhs.cend(), lhs);
+                        });
+    std::cout << "++++++++ failed pt bins for dphi " << iBin << "++++++++++"
+              << "\n";
     for (auto fit : failed) {
       std::cout << "pt1 " << fit[0] << ", pt2 " << fit[1] << "\n";
     }
     std::cout << std::flush;
-    return r_ml_wgt_corr;
+    return;
   }
+
+void xjjroot::fit2d::projectionPlot(RooAddPdf model, RooFitResult *result,
+                                    RooDataSet dataset, int xpt, int ypt,
+                                    RooRealVar nss, TString outputname,
+                                    TString collisionsyst,
+                                    const std::vector<TString> &vtex) {
+  // Cut ranges for N - 1 plots
+  m1.setRange("signal_box_m1", min_fit_dzero, max_hist_dzero);
+  m2.setRange("signal_box_m1", mass_dzero_signal_l, mass_dzero_signal_h);
+
+  m1.setRange("signal_box_m2", mass_dzero_signal_l, mass_dzero_signal_h);
+  m2.setRange("signal_box_m2", min_fit_dzero, max_hist_dzero);
+
+  std::vector<RooRealVar> dim = {m1, m2};
+  std::vector<TString> dzerotex = {"D^{0}", "#bar{D^{#lower[0.2]{0}}}"};
+
+  auto canv = new TCanvas("ptcanvas", "Canvas", 800, 600);
+  canv->SetFillColor(color::snow2);
+
+  // Produce string including multiple components with correct order
+  auto compstr = [](TString name, TString thisdim,
+                    std::initializer_list<TString> thatdim) {
+    TString str;
+    for (auto i : thatdim) {
+      if (name == "m1") {
+        str += thisdim + i + ",";
+      } else {
+        str += i + thisdim + ",";
+      }
+    }
+    str.Remove(str.Length() - 1);
+    return str;
+  };
+
+  // Plot data and fitting for D and Dbar
+  for (auto m : dim) {
+    TString name(m.GetName());
+    RooPlot *plot = m.frame(Title(name + "_plot"), Bins(60));
+    dataset.plotOn(plot, Name("pdat" + name), CutRange("signal_box_" + name));
+    model.plotOn(plot, ProjectionRange("signal_box_" + name),
+                 VisualizeError(*result));
+    dataset.plotOn(plot, Name("pdat" + name), CutRange("signal_box_" + name),
+                   DataError(RooAbsData::SumW2));
+    model.plotOn(plot, Name("pfit" + name),
+                 ProjectionRange("signal_box_" + name));
+    model.plotOn(plot, Name("psig3" + name),
+                 ProjectionRange("signal_box_" + name),
+                 // Components(compstr(name, "sig", {"sig", "swp", "bkg"})),
+                 Components(compstr(name, "sig", {"bkg"})), DrawOption("LF"),
+                 FillStyle(3002), FillColor(color::aurora4), LineStyle(2),
+                 LineColor(color::aurora4));
+    model.plotOn(plot, Name("psig2" + name),
+                 ProjectionRange("signal_box_" + name),
+                 Components(compstr(name, "sig", {"swp"})), DrawOption("LF"),
+                 FillStyle(3002), FillColor(color::aurora2), LineStyle(2),
+                 LineColor(color::aurora2));
+    model.plotOn(plot, Name("psig" + name),
+                 ProjectionRange("signal_box_" + name), Components("sigsig"),
+                 DrawOption("LF"), FillStyle(3002), FillColor(color::aurora0),
+                 LineStyle(2), LineColor(color::aurora0));
+    model.plotOn(plot, Name("pbkg3" + name),
+                 ProjectionRange("signal_box_" + name),
+                 Components(compstr(name, "bkg", {"bkg"})), LineStyle(2),
+                 LineColor(color::frost3));
+    model.plotOn(plot, Name("pbkg2" + name),
+                 ProjectionRange("signal_box_" + name),
+                 Components(compstr(name, "bkg", {"swp"})), LineStyle(2),
+                 LineColor(color::frost2));
+    model.plotOn(plot, Name("pbkg" + name),
+                 ProjectionRange("signal_box_" + name),
+                 Components(compstr(name, "bkg", {"sig"})), LineStyle(2),
+                 LineColor(color::frost0));
+    model.plotOn(plot, Name("pswp3" + name),
+                 ProjectionRange("signal_box_" + name),
+                 Components(compstr(name, "swp", {"bkg"})), DrawOption("LF"),
+                 FillStyle(3005), FillColor(color::night0), LineStyle(1),
+                 LineColor(color::night1));
+    model.plotOn(plot, Name("pswp2" + name),
+                 ProjectionRange("signal_box_" + name),
+                 Components(compstr(name, "swp", {"swp"})), DrawOption("LF"),
+                 FillStyle(3005), FillColor(color::night1), LineStyle(1),
+                 LineColor(color::night2));
+    model.plotOn(plot, Name("pswp" + name),
+                 ProjectionRange("signal_box_" + name),
+                 Components(compstr(name, "swp", {"sig"})), DrawOption("LF"),
+                 FillStyle(3005), FillColor(color::night2), LineStyle(1),
+                 LineColor(color::night3));
+    plot->Draw();
+
+    TLegend *leg = new TLegend(0.69, 0.18, 0.89, 0.78, NULL, "brNDC");
+    leg->SetBorderSize(0);
+    leg->SetFillStyle(0);
+    leg->SetTextFont(42);
+    leg->SetTextSize(0.04);
+
+    leg->AddEntry("pdat" + name, "Data", "pl");
+    leg->AddEntry("pfit" + name, "Fit", "l");
+
+    auto make_legend = [dzerotex](TString name, TString thisdim,
+                                  TString thatdim) {
+      TString str;
+      if (name == "m1") {
+        str = dzerotex[0] + thisdim + "+" + dzerotex[1] + thatdim;
+      } else {
+        str = dzerotex[0] + thatdim + "+" + dzerotex[1] + thisdim;
+      }
+      return str;
+    };
+
+    leg->AddEntry("psig3" + name, make_legend(name, "sig", "bkg"), "f");
+    leg->AddEntry("psig2" + name, make_legend(name, "sig", "swap"), "f");
+    leg->AddEntry("psig" + name, make_legend(name, "sig", "sig"), "f");
+    leg->AddEntry("pswp3" + name, make_legend(name, "swap", "bkg"), "f");
+    leg->AddEntry("pswp2" + name, make_legend(name, "swap", "swap"), "f");
+    leg->AddEntry("pswp" + name, make_legend(name, "swp", "sig"), "f");
+    leg->AddEntry("pbkg3" + name, make_legend(name, "bkg", "bkg"), "l");
+    leg->AddEntry("pbkg2" + name, make_legend(name, "bkg", "swap"), "l");
+    leg->AddEntry("pbkg" + name, make_legend(name, "bkg", "sig"), "l");
+
+    leg->Draw("same");
+
+    drawCMS(collisionsyst);
+
+    TString other = (name == m1.GetName()) ? "D" : "#bar{D}";
+    Float_t texxpos = 0.22, texypos = 0.55, texdypos = 0.053;
+    if (!vtex.empty()) {
+      texypos += texlinespc;
+      for (std::vector<TString>::const_iterator it = vtex.begin();
+           it != vtex.end(); it++)
+        drawtex(texxpos, texypos = (texypos - texdypos - texlinespc), *it);
+    }
+    drawtex(texxpos, texypos = (texypos - texdypos),
+            Form("(%.3f < m_{%s} < %.3f)", mass_dzero_signal_l, other.Data(),
+                 mass_dzero_signal_h));
+    if (fdrawyield) {
+      drawtex(texxpos, texypos = (texypos - texdypos),
+              Form("N = %.0f #pm %.0f", nss.getValV(), nss.getError()));
+    }
+    // Add pt range onto the plots
+    if (xpt > 0 && ypt > 0) {
+      drawtex(0.75, 0.85, Form("%.1f < p_{T, D} < %.1f", ptbins[xpt], ptbins[xpt + 1]));
+      drawtex(0.75, 0.78, Form("%.1f < p_{T, #bar{D}} < %.1f", ptbins[ypt], ptbins[ypt + 1]));
+      canv->SaveAs(outputname + Form("_x%.1f_y%.1f_", ptbins[xpt], ptbins[ypt]) + name + ".pdf");
+    } else {
+      drawtex(0.75, 0.85, "p_{T} inclusive");
+      canv->SaveAs(outputname + "_inclusive_" + name + ".pdf");
+    }
+
+  }
+}
 
 /*
   Do an unbinned extended simultaneous ML fit on D0 mass in a certain dphi bin
@@ -479,7 +530,7 @@ RooFitResult* xjjroot::fit2d::fit(
   @param isSig   int     1:signal 0:sideband
   @param iBin    int     ID of delta phi bin
 */
-RooFitResult *xjjroot::fit2d::simfit(
+void xjjroot::fit2d::simfit(
     TTree *sigtree, TTree *swaptree, const int iBin,
     TString collisionsyst /*=""*/, TString outputname /*="cmass"*/,
     const std::vector<TString> &vtex /*=std::vector<TString>()*/) {
@@ -896,7 +947,7 @@ RooFitResult *xjjroot::fit2d::simfit(
   TString dir = outputname(0, outputname.Length() - 3);
   canv2d->SaveAs(Form("%s" + ddname + ".pdf", dir.Data()));
 
-  return r_ml_wgt_corr;
+  return;
 }
 void xjjroot::fit2d::reset()
 {

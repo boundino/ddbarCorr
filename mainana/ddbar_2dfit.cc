@@ -24,6 +24,9 @@ void ddbar_2dfit(std::string inputname, std::string swapname, std::string output
 
   TH1F* hdphi_sub = new TH1F("hdphi_sub", ";#Delta#phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / #pi;N(D^{0}-#bar{D^{#lower[0.2]{0}}})", binfo->nphibin(), binfo->phibin().data());
   TH1F* hdphi_sub_norm = new TH1F("hdphi_sub_norm", ";#Delta#phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / #pi;1/N dN/d#Delta#phi", binfo->nphibin(), binfo->phibin().data());
+  TH1F *hdphi_inc = new TH1F("hdphi_inc", ";#Delta#phi(D^{0}, #bar{D^{#lower[0.2]{0}}}) / "
+                             "#pi;N(D^{0}-#bar{D^{#lower[0.2]{0}}})",
+                             binfo->nphibin(), binfo->phibin().data());
 
   std::vector<float> phi_range;
   for (auto i = 0; i <= binfo->nphibin() / 2; ++i) {
@@ -49,16 +52,18 @@ void ddbar_2dfit(std::string inputname, std::string swapname, std::string output
 
   // float sidebandscale = fitter->GetSidebandScale();
   fitter->SetOption("Y");
-  std::vector<RooFitResult> status;
   for(int k=0; k<binfo->nphibin(); k++)
     {
       label.push_back(Form("%s < #Delta#phi/#pi < %s", xjjc::number_remove_zero(binfo->phibin()[k]).c_str(), xjjc::number_remove_zero(binfo->phibin()[k+1]).c_str()));
-      auto result = fitter->fit(k, "PbPb", Form("%s/idx/c%02d", outputname.c_str(), k), label);
-      status.push_back(*result);
+      fitter->fit(k, "PbPb", Form("%s/idx/c%02d", outputname.c_str(), k), label);
 
       hdphi_sub->SetBinContent(k + 1, fitter->GetY());
       hdphi_sub->SetBinError(k + 1, fitter->GetYE());
       hdphi_sub->Sumw2();
+
+      hdphi_inc->SetBinContent(k + 1, fitter->GetYInc());
+      hdphi_inc->SetBinError(k + 1, fitter->GetYEInc());
+      hdphi_inc->Sumw2();
 
       hdphi_sub_norm->SetBinContent(k+1, hdphi_sub->GetBinContent(k+1) / hdphi_sub_norm->GetBinWidth(k+1));
       hdphi_sub_norm->SetBinError(k+1, hdphi_sub->GetBinError(k+1) / hdphi_sub_norm->GetBinWidth(k+1));
@@ -66,11 +71,6 @@ void ddbar_2dfit(std::string inputname, std::string swapname, std::string output
       label.pop_back();
     }
 
-  // int idphi = 0;
-  // for (auto i : status) {
-  //   std::cout << idphi++ << "\n";
-  //   i.Print();
-  // }
   hdphi_sub_norm->Scale(1./hdphi_sub_norm->Integral("width"));
 
   hdphi_sub_norm->GetXaxis()->SetNdivisions(-504);
@@ -101,6 +101,13 @@ void ddbar_2dfit(std::string inputname, std::string swapname, std::string output
   xjjroot::drawCMSright("2018 PbPb 5.02 TeV");
   c->SaveAs(Form("%s/chdphi.pdf", outputname.c_str()));
   delete c;
+
+  TCanvas *c2 = new TCanvas("c2", "", 600, 600);
+  hdphi_inc->Draw();
+  kinfo->drawlabel(0.60, 0.85);
+  xjjroot::drawCMSleft();
+  xjjroot::drawCMSright("2018 PbPb 5.02 TeV");
+  c2->SaveAs(Form("%s/chdphi_inc.pdf", outputname.c_str()));
 
   TFile* outf = new TFile(Form("rootfiles/%s/fithist.root", outputdir.c_str()), "recreate");
   kinfo->write();

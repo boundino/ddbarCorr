@@ -71,21 +71,27 @@ namespace xjjroot
     }
     ~fit2d(){};
 
-    RooFitResult *
-    fit(const int iBin,
-        TString collisionsyst = "", TString outputname = "cmass",
-        const std::vector<TString> &vtex = std::vector<TString>());
+    void fit(const int iBin, TString collisionsyst = "",
+             TString outputname = "cmass",
+             const std::vector<TString> &vtex = std::vector<TString>());
 
-    RooFitResult *
-    simfit(TTree *sigtree, TTree *swaptree, const int iBin,
-        TString collisionsyst = "", TString outputname = "cmass",
-        const std::vector<TString> &vtex = std::vector<TString>());
+    void projectionPlot(RooAddPdf model, RooFitResult *result,
+                        RooDataSet dataset, int xpt, int ypt,
+                        RooRealVar nss,
+                        TString outputname, TString collisionsyst,
+                        const std::vector<TString> &vtex);
+
+    void simfit(TTree *sigtree, TTree *swaptree, const int iBin,
+                TString collisionsyst = "", TString outputname = "cmass",
+                const std::vector<TString> &vtex = std::vector<TString>());
 
     Double_t GetS() const {return S;}
     Double_t GetB() const {return B;}
     Double_t GetSig() const {return Sig;}
     Double_t GetY() const {return yield;}
     Double_t GetYE() const {return yieldErr;}
+    Double_t GetYInc() const { return yieldInc; }
+    Double_t GetYEInc() const { return yieldErrInc; }
     Double_t GetChi2() const {return Chi2;}
     Double_t GetNDF() const {return NDF;}
     Double_t GetChi2Prob() const {return Chi2Prob;}
@@ -113,6 +119,9 @@ namespace xjjroot
     Double_t NDF;
     Double_t Chi2Prob;
     Double_t sidebandScale;
+
+    Double_t yieldInc;
+    Double_t yieldErrInc;
 
     TFitResultPtr r;
 
