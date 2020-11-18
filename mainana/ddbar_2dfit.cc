@@ -41,7 +41,7 @@ void ddbar_2dfit(std::string inputname, std::string swapname, std::string output
   };
 
   // xjjroot::dfitter* fitter = new xjjroot::dfitter("YL");
-  xjjroot::fit2d* fitter = new xjjroot::fit2d("YLR");
+  xjjroot::fit2d *fitter = new xjjroot::fit2d(tmass, swapmass, "YLR");
   fitter->SetSignalregion(ddbar::signalwidth);
   fitter->SetSidebandL(ddbar::sideband_l);
   fitter->SetSidebandH(ddbar::sideband_h);
@@ -53,7 +53,7 @@ void ddbar_2dfit(std::string inputname, std::string swapname, std::string output
   for(int k=0; k<binfo->nphibin(); k++)
     {
       label.push_back(Form("%s < #Delta#phi/#pi < %s", xjjc::number_remove_zero(binfo->phibin()[k]).c_str(), xjjc::number_remove_zero(binfo->phibin()[k+1]).c_str()));
-      auto result = fitter->fit(tmass, swapmass, k, "PbPb", Form("%s/idx/c%02d", outputname.c_str(), k), label);
+      auto result = fitter->fit(k, "PbPb", Form("%s/idx/c%02d", outputname.c_str(), k), label);
       status.push_back(*result);
 
       hdphi_sub->SetBinContent(k + 1, fitter->GetY());

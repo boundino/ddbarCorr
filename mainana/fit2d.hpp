@@ -63,11 +63,16 @@ namespace xjjroot
   class fit2d
   {
   public:
-    fit2d(Option_t* option="") {foption = option; resolveoption(); init();}
-    ~fit2d() {};
+    fit2d(TTree *sigtree, TTree *swaptree, Option_t *option = "")
+        : sigtree(sigtree), swaptree(swaptree) {
+      foption = option;
+      resolveoption();
+      init();
+    }
+    ~fit2d(){};
 
     RooFitResult *
-    fit(TTree *sigtree, TTree *swaptree, const int iBin,
+    fit(const int iBin,
         TString collisionsyst = "", TString outputname = "cmass",
         const std::vector<TString> &vtex = std::vector<TString>());
 
@@ -97,6 +102,8 @@ namespace xjjroot
     Double_t GetSidebandScale() const {return sidebandScale;}
 
   private:
+    TTree *sigtree;
+    TTree *swaptree;
     Double_t S;
     Double_t B;
     Double_t Sig;
@@ -154,6 +161,32 @@ namespace xjjroot
     const Double_t max_weight = (int) 1e7;
 
     Double_t texlinespc = 0;
+
+    const Double_t min_fit_dzero = 1.73;
+
+    // Declare an observable for D0 mass
+    RooRealVar m1 = {"m1", "m_{D} / GeV", min_fit_dzero, max_hist_dzero};
+    RooRealVar m2 = {"m2", "m_{#bar{D}} / GeV", min_fit_dzero, max_hist_dzero};
+
+    RooRealVar iPhi = {"iPhi", "dphi bin ID", 0, 20};
+    RooRealVar isSwap1 = {"isSwap1", "whether m1 is swapped", 0, 1};
+    RooRealVar isSwap2 = {"isSwap2", "whether m2 is swapped", 0, 1};
+    RooRealVar pt1 = {"pt1", "pt of D", 0, 60};
+    RooRealVar pt2 = {"pt2", "pt of Dbar", 0, 60};
+    RooRealVar pT1 = {"pT1", "pt of D", 0, 60};
+    RooRealVar pT2 = {"pT2", "pt of Dbar", 0, 60};
+
+    // weight of the D0 mass
+    // RooRealVar w("weight", "weight", min_weight, max_weight);
+    // RooRealVar werr("weightErr", "error of weight", min_weight, max_weight);
+
+    // Construct an unbinned dataset from tree branches
+    RooDataSet total_ds = {"ds", "ds", RooArgSet(m1, m2, iPhi, pT1, pT2),
+                           Import(*sigtree)};
+
+    RooDataSet swapds = {"swapds", "swapped dataset",
+                         RooArgSet(m1, isSwap1, pt1, m2, isSwap2, pt2),
+                         Import(*swaptree)};
 
     // Reference pt bins = {1.0,  2.0,  2.5,  3.0,  3.5,  4.0, 4.5,
     // 5.5, 6.0, 6.5, 7.0, 8.0, 10.0,

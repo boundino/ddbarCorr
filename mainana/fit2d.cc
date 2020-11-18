@@ -47,7 +47,7 @@ void xjjroot::fit2d::resolveoption()
   @param iBin    int     ID of delta phi bin
 */
 RooFitResult* xjjroot::fit2d::fit(
-    TTree* sigtree, TTree* swaptree, const int iBin,
+    const int iBin,
     TString collisionsyst /*=""*/, TString outputname /*="cmass"*/,
     const std::vector<TString> &vtex /*=std::vector<TString>()*/) {
   reset();
@@ -61,31 +61,13 @@ RooFitResult* xjjroot::fit2d::fit(
   TString fitoption = ffitverbose ? "L m" : "L m q";
   setgstyle();
 
-  const Double_t min_fit_dzero = 1.73;
-  // Declare an observable for D0 mass
-  RooRealVar m1("m1", "m_{D} / GeV", min_fit_dzero, max_hist_dzero);
-  RooRealVar m2("m2", "m_{#bar{D}} / GeV", min_fit_dzero, max_hist_dzero);
-
-  // weight of the D0 mass
-  // RooRealVar w("weight", "weight", min_weight, max_weight);
-
   // set range for D0 mass
   m1.setRange("D0range", min_fit_dzero, max_hist_dzero);
   m2.setRange("D0range", min_fit_dzero, max_hist_dzero);
 
-  RooRealVar iPhi("iPhi", "dphi bin ID", 0, 20);
-  // RooRealVar werr("weightErr", "error of weight", min_weight, max_weight);
-  RooRealVar isSwap1("isSwap1", "whether m1 is swapped", 0, 1);
-  RooRealVar isSwap2("isSwap2", "whether m2 is swapped", 0, 1);
-  RooRealVar pt1("pt1", "pt of D", 0, 60);
-  RooRealVar pt2("pt2", "pt of Dbar", 0, 60);
-  RooRealVar pT1("pT1", "pt of D", 0, 60);
-  RooRealVar pT2("pT2", "pt of Dbar", 0, 60);
-
-  // Construct an unbinned dataset from tree branches
-  // Select the dphi bin in question
-  RooDataSet ds("ds", "ds", RooArgSet(m1, m2, iPhi, pT1, pT2),
-                Cut(TString::Format("iPhi == %i", iBin)), Import(*sigtree));
+  // select the dphi bin in question
+  RooDataSet ds = *(RooDataSet *)total_ds.reduce(
+      RooArgSet(m1, m2, pT1, pT2), Form("iPhi == %i", iBin));
 
   // Divide the data into pt bins
   using dsvec = std::vector<RooDataSet *>;
@@ -98,14 +80,11 @@ RooFitResult* xjjroot::fit2d::fit(
         continue;
       }
       dsets[i][j] = (RooDataSet *)ds.reduce(
-          RooArgSet(m1, m2), Form("pT1 > %f && pT1 < %f && pT2 > %f && pT2 < %f",
-                              ptbins[i], ptbins[i + 1], ptbins[j], ptbins[j + 1]));
+          RooArgSet(m1, m2),
+          Form("pT1 > %f && pT1 < %f && pT2 > %f && pT2 < %f", ptbins[i],
+               ptbins[i + 1], ptbins[j], ptbins[j + 1]));
     }
   }
-
-  RooDataSet swapds("swapds", "swapped dataset",
-                    RooArgSet(m1, isSwap1, pt1, m2, isSwap2, pt2),
-                    Import(*swaptree));
 
   dsvec sigdsm1(ptbins.size() - 1);
   dsvec sigdsm2(ptbins.size() - 1);
