@@ -155,6 +155,15 @@ namespace xjjroot
 
     Double_t texlinespc = 0;
 
+    // Reference pt bins = {1.0,  2.0,  2.5,  3.0,  3.5,  4.0, 4.5,
+    // 5.5, 6.0, 6.5, 7.0, 8.0, 10.0,
+    // 12.5, 15.0, 20.0, 30.0, 40.0, 60.0};
+    // Use wider ranges to ensure enough events in each pt bin
+    const std::vector<double> ptbins = {1.0, 2.0, 2.5, 3.0, 3.5,
+                                        4.0, 5.5, 6.5, 60.0};
+    // Only go through the following (idphi, xpt, ypt) bins
+    std::vector<std::array<double, 3> > skiptobins;
+
     void init();
     void reset();
     void createfun();

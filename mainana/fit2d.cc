@@ -11,6 +11,9 @@
 #include <cmath>
 #include <initializer_list>
 #include <numeric>
+
+#include <fstream>
+
 using namespace RooFit;
 
 void xjjroot::fit2d::resolveoption()
@@ -79,11 +82,6 @@ RooFitResult* xjjroot::fit2d::fit(
   RooRealVar pT1("pT1", "pt of D", 0, 60);
   RooRealVar pT2("pT2", "pt of Dbar", 0, 60);
 
-  // Reference pt bins = {1.0,  2.0,  2.5,  3.0,  3.5,  4.0, 4.5,
-  // 5.5, 6.0, 6.5, 7.0, 8.0, 10.0,
-  // 12.5, 15.0, 20.0, 30.0, 40.0, 60.0};
-  // Use wider ranges to ensure enough events in each pt bin
-  const std::vector<double> ptbins = {1.0, 2.0, 2.5, 3.0, 3.5, 4.0, 5.5, 6.5, 60.0};
   // Construct an unbinned dataset from tree branches
   // Select the dphi bin in question
   RooDataSet ds("ds", "ds", RooArgSet(m1, m2, iPhi, pT1, pT2),
@@ -94,6 +92,11 @@ RooFitResult* xjjroot::fit2d::fit(
   std::vector<dsvec> dsets(ptbins.size() - 1, dsvec(ptbins.size() - 1));
   for (unsigned i = 0; i < ptbins.size() - 1; ++i) {
     for (unsigned j = 0; j < ptbins.size() - 1; ++j) {
+      std::array<double, 3> ptvec = {(double)iBin, ptbins[i], ptbins[j] };
+      if (skiptobins.size() > 0 &&
+          std::find(skiptobins.cbegin(), skiptobins.cend(), ptvec) == skiptobins.end()) {
+        continue;
+      }
       dsets[i][j] = (RooDataSet *)ds.reduce(
           RooArgSet(m1, m2), Form("pT1 > %f && pT1 < %f && pT2 > %f && pT2 < %f",
                               ptbins[i], ptbins[i + 1], ptbins[j], ptbins[j + 1]));
@@ -247,6 +250,16 @@ RooFitResult* xjjroot::fit2d::fit(
       swpy.fitTo(*swapdsm2[ypt], Save());
       for (auto par : fixed_pars)
         par->setConstant(true);
+
+      std::array<double, 3> ptvec = {(double)iBin, ptbins[xpt], ptbins[ypt]};
+      if (skiptobins.size() > 0 &&
+          std::find(skiptobins.cbegin(), skiptobins.cend(), ptvec) ==
+              skiptobins.end()) {
+        yields[xpt].push_back(0);
+        yieldErrs[xpt].push_back(0);
+        notsigs[xpt].push_back(0);
+        continue;
+      }
 
       auto dataset = *dsets[xpt][ypt];
       const long num_max = dataset.sumEntries("", "D0range");
@@ -914,6 +927,14 @@ void xjjroot::fit2d::reset()
 void xjjroot::fit2d::init()
 {
   clearvar();
+  // read bins to skip from the config file
+  std::ifstream fin("skip_to_bins.txt");
+  double idphi;
+  double xpt;
+  double ypt;
+  while (fin >> idphi >> xpt >> ypt) {
+    skiptobins.push_back({idphi, xpt, ypt});
+  }
 }
 
 void xjjroot::fit2d::clearvar()
