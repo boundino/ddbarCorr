@@ -328,6 +328,8 @@ void xjjroot::fit2d::fit(
   // Extended to get Nsig directly
   r_ml_wgt_corr = model.fitTo(ds, Save(), Extended(kTRUE), NumCPU(8));
   r_ml_wgt_corr->Print();
+  yieldInc = nss.getValV();
+  yieldErrInc = nss.getError();
   projectionPlot(model, r_ml_wgt_corr, ds, 0, 0, nss, outputname,
                  collisionsyst, vtex);
 
@@ -363,14 +365,17 @@ void xjjroot::fit2d::fit(
                         [](auto lhs, const auto &rhs) {
                           return std::accumulate(rhs.cbegin(), rhs.cend(), lhs);
                         });
-    std::cout << "++++++++ failed pt bins for dphi " << iBin << "++++++++++"
-              << "\n";
-    for (auto fit : failed) {
-      std::cout << "pt1 " << fit[0] << ", pt2 " << fit[1] << "\n";
+    if (!failed.empty()) {
+      std::cerr << "++++++++ failed pt bins for dphi " << iBin << " ++++++++++" << "\n";
+      for (auto fit : failed) {
+        std::cerr << "pt1: " << fit[0] << ", pt2: " << fit[1] << "\n";
+      }
+      std::cerr << "++++++++++++++++++++++++" << std::endl;
+    } else {
+      std::cout << "+++ fitting finished for dphi " << iBin << "without error"  << "\n";
     }
-    std::cout << std::flush;
     return;
-  }
+}
 
 void xjjroot::fit2d::projectionPlot(RooAddPdf model, RooFitResult *result,
                                     RooDataSet dataset, int xpt, int ypt,
@@ -956,7 +961,6 @@ void xjjroot::fit2d::reset()
 
 void xjjroot::fit2d::init()
 {
-  clearvar();
   // read bins to skip from the config file
   std::ifstream fin("skip_to_bins.txt");
   double idphi;
