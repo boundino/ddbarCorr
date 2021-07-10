@@ -19,6 +19,11 @@
 
 #include <algorithm>
 
+// whether to set the initial values of the fitting parameters to the answer
+constexpr bool cheat = true;
+// whether to include the swap components
+constexpr bool use_swap = false;
+
 using namespace RooFit;
 
 namespace color {
@@ -116,10 +121,32 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
   RooAddPdf modelbkgsig("modelbkgsig", "composite pdf", RooArgList(bkgsig), RooArgList(nbs));
   RooAddPdf modelbkg("modelbkg", "composite pdf", RooArgList(bkgbkg), RooArgList(nbb));
 
+  RooAddPdf modelswpswp("modelswpswp", "composite pdf", RooArgList(swpswp), RooArgList(nss));
+  RooAddPdf modelsigswp("modelsigswp", "composite pdf", RooArgList(sigswp), RooArgList(nss));
+  RooAddPdf modelswpsig("modelswpsig", "composite pdf", RooArgList(swpsig), RooArgList(nss));
+  RooAddPdf modelswpbkg("modelswpbkg", "composite pdf", RooArgList(swpbkg), RooArgList(nsb));
+  RooAddPdf modelbkgswp("modelbkgswp", "composite pdf", RooArgList(bkgswp), RooArgList(nbs));
+
   RooAddPdf modelsb(
       "modelsb", "composite pdf",
       RooArgList(sigsig, sigbkg, bkgsig, bkgbkg), RooArgList(nss, nsb, nbs, nbb));
 
+  // model including the swap comonent, using the same event number as signal
+  RooAddPdf modelsbw(
+                     "modelsbw", "composite pdf",
+                     RooArgList(sigsig, sigswp, sigbkg, swpsig, swpswp, swpbkg,
+                                bkgsig, bkgswp, bkgbkg),
+                     RooArgList(nss, nss, nsb, nss, nss, nsb, nbs, nbs, nbb));
+
+  RooAddPdf* modelptr;
+  if (!use_swap) {
+    modelptr = new RooAddPdf(modelsb, "model");
+      } else {
+    modelptr = new RooAddPdf(modelsbw, "model");
+  }
+  RooAddPdf model = *modelptr;
+
+  // Fix the signal shape during fitting
   sigfracx.setConstant();
   sigma1x.setConstant();
   sigma2x.setConstant();
@@ -147,6 +174,12 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
   RooDataSet* dbs = modelbkgsig.generate(mset, 184);
   RooDataSet* dbb = modelbkg.generate(mset, 5642);
   RooDataSet* sum = new RooDataSet("sum", "sum", mset);
+  RooDataSet* dww = modelswpswp.generate(mset, 6);
+  RooDataSet* dsw = modelsigswp.generate(mset, 6);
+  RooDataSet* dws = modelswpsig.generate(mset, 6);
+  RooDataSet* dwb = modelswpbkg.generate(mset, 167);
+  RooDataSet* dbw = modelbkgswp.generate(mset, 184);
+
   vars fitted;
   TTree* res = new TTree("res", "res");
   res->Branch("status", &fitted.status, "status/I");
@@ -187,22 +220,39 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
       sum->append(*dbs);
       sum->append(*dbb);
 
+      if (use_swap) {
+        dww = modelswpswp.generate(mset, 6);
+        dsw = modelsigswp.generate(mset, 6);
+        dws = modelswpsig.generate(mset, 6);
+        dwb = modelswpbkg.generate(mset, 167);
+        dbw = modelbkgswp.generate(mset, 184);
+        sum->append(*dww);
+        sum->append(*dsw);
+        sum->append(*dws);
+        sum->append(*dbw);
+        sum->append(*dwb);
+      }
+
       // reset fitted variables to the "answer"
-      nss.setVal(6);
-      nsb.setVal(167);
-      nbs.setVal(184);
-      nbb.setVal(5642);
-      mean.setVal(mass_dzero);
-      a1.setVal(-0.2);
-      a2.setVal(0.02);
-      a3.setVal(0.0);
-      b1.setVal(-0.2);
-      b2.setVal(0.02);
-      b3.setVal(0.0);
+      if (cheat) {
+        nss.setVal(6);
+        nsb.setVal(167);
+        nbs.setVal(184);
+        nbb.setVal(5642);
+        mean.setVal(mass_dzero);
+        a1.setVal(-0.2);
+        a2.setVal(0.02);
+        a3.setVal(0.0);
+        b1.setVal(-0.2);
+        b2.setVal(0.02);
+        b3.setVal(0.0);
+        sigmasx.setVal(0.1);
+        sigmasy.setVal(0.1);
+      }
 
       // fit on the combined PDF
       RooFitResult* result;
-      result = modelsb.fitTo(*sum, Extended(), Save(), NumCPU(6));
+      result = model.fitTo(*sum, Extended(), Save(), NumCPU(6));
       fitted.status = result->status();
 
       std::cout << "Fitting result: " <<
@@ -222,11 +272,18 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
       res->Fill();
 
       if (fitted.status) {
-        std::cout << "=== Fitting failed! ===" << "\n";
+        std::cout << "=== Fitting failed for event " << i << "! ===" << "\n";
         std::cout << "Nss global correlation coeff.: " << result->globalCorr("nss") << "\n";
         std::cout << "Nbb global correlation coeff.: " << result->globalCorr("nbb") << "\n";
         std::cout << "Nsb global correlation coeff.: " << result->globalCorr("nsb") << "\n";
         std::cout << "Nbs global correlation coeff.: " << result->globalCorr("nbs") << "\n";
+        std::cout << "mean global correlation coeff.: " << result->globalCorr("mean") << "\n";
+        std::cout << "a1 global correlation coeff.: " << result->globalCorr("a1") << "\n";
+        std::cout << "a2 global correlation coeff.: " << result->globalCorr("a2") << "\n";
+        std::cout << "a3 global correlation coeff.: " << result->globalCorr("a3") << "\n";
+        std::cout << "b1 global correlation coeff.: " << result->globalCorr("b1") << "\n";
+        std::cout << "b2 global correlation coeff.: " << result->globalCorr("b2") << "\n";
+        std::cout << "b3 global correlation coeff.: " << result->globalCorr("b3") << "\n";
         result->Print();
         result->correlationMatrix().Print();
         std::cout << std::endl;
@@ -255,22 +312,51 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
           modelsb.plotOn(plot, VisualizeError(*result));
           sum->plotOn(plot, Name("pdat" + name),
                       DataError(RooAbsData::SumW2));
-          modelsb.plotOn(plot, Name("pfit" + name));
-          modelsb.plotOn(plot, Name("psig" + name), Components("sigsig"),
+          model.plotOn(plot, Name("pfit" + name));
+          model.plotOn(plot, Name("psig" + name), Components("sigsig"),
                          DrawOption("LF"), FillStyle(3002), FillColor(color::aurora0),
                          LineStyle(2), LineColor(color::aurora0));
-          modelsb.plotOn(plot, Name("pbkg" + name), Components("bkgbkg"),
+          model.plotOn(plot, Name("pbkg" + name), Components("bkgbkg"),
                          DrawOption("LF"), LineStyle(2), LineColor(color::frost1));
-          modelsb.plotOn(plot, Name("psig2" + name),
+          model.plotOn(plot, Name("psig2" + name),
                          Components(compstr(name, "sig", {"bkg"})),
                          DrawOption("LF"), FillStyle(3002), FillColor(color::aurora2),
                          LineStyle(2), LineColor(color::aurora2));
-          modelsb.plotOn(plot, Name("pbkg2" + name),
+          model.plotOn(plot, Name("pbkg2" + name),
                          Components(compstr(name, "bkg", {"sig"})),
                          DrawOption("LF"), LineStyle(2), LineColor(color::frost3));
+
+          if (use_swap) {
+            model.plotOn(plot, Name("psig3" + name),
+                         ProjectionRange("signal_box_" + name),
+                         // Components(compstr(name, "sig", {"sig", "swp", "bkg"})),
+                         Components(compstr(name, "sig", {"swp"})), DrawOption("LF"),
+                         FillStyle(3002), FillColor(color::aurora4), LineStyle(2),
+                         LineColor(color::aurora4));
+            model.plotOn(plot, Name("pbkg3" + name),
+                         ProjectionRange("signal_box_" + name),
+                         Components(compstr(name, "bkg", {"swp"})), LineStyle(2),
+                         LineColor(color::frost2));
+            model.plotOn(plot, Name("pswp3" + name),
+                         ProjectionRange("signal_box_" + name),
+                         Components(compstr(name, "swp", {"swp"})), DrawOption("LF"),
+                         FillStyle(3005), FillColor(color::night0), LineStyle(1),
+                         LineColor(color::night1));
+            model.plotOn(plot, Name("pswp2" + name),
+                         ProjectionRange("signal_box_" + name),
+                         Components(compstr(name, "swp", {"bkg"})), DrawOption("LF"),
+                         FillStyle(3005), FillColor(color::night1), LineStyle(1),
+                         LineColor(color::night2));
+            model.plotOn(plot, Name("pswp" + name),
+                         ProjectionRange("signal_box_" + name),
+                         Components(compstr(name, "swp", {"sig"})), DrawOption("LF"),
+                         FillStyle(3005), FillColor(color::night2), LineStyle(1),
+                         LineColor(color::night3));
+          }
+
           plot->Draw();
 
-          TLegend *leg = new TLegend(0.69, 0.18, 0.89, 0.58, NULL, "brNDC");
+          TLegend *leg = new TLegend(0.11, 0.18, 0.31, 0.78, NULL, "brNDC");
           leg->SetBorderSize(0);
           leg->SetFillStyle(0);
           leg->SetTextFont(42);
@@ -295,6 +381,13 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
           leg->AddEntry("pbkg" + name, make_legend(name, "bkg", "bkg"), "l");
           leg->AddEntry("pbkg2" + name, make_legend(name, "bkg", "sig"), "l");
 
+          if (use_swap) {
+            leg->AddEntry("pswp3" + name, make_legend(name, "swap", "swap"), "f");
+            leg->AddEntry("pswp2" + name, make_legend(name, "swap", "bkg"), "f");
+            leg->AddEntry("pswp" + name, make_legend(name, "swp", "sig"), "f");
+            leg->AddEntry("pbkg3" + name, make_legend(name, "bkg", "swap"), "l");
+            leg->AddEntry("psig3" + name, make_legend(name, "sig", "swap"), "f");
+          }
           leg->Draw("same");
 
           canv->SaveAs("evt_" + std::to_string(i) + "_" + name + ".png");
