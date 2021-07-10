@@ -23,6 +23,17 @@
 constexpr bool cheat = true;
 // whether to include the swap components
 constexpr bool use_swap = false;
+// whether to use data instead of MC
+constexpr bool use_data = false;
+// whether to fix the signal shape during the fit
+constexpr bool fix_sig = true;
+
+
+
+const double nSigSig = 6;
+const double nSigBkg = 167;
+const double nBkgSig = 184;
+const double nBkgBkg = 5642;
 
 using namespace RooFit;
 
@@ -44,6 +55,21 @@ namespace color {
   int aurora3 = TColor::GetColor("#a3be8c");
   int aurora4 = TColor::GetColor("#b48ead");
 };
+
+struct vars
+{
+  Int_t status;
+  double nss;
+  double nsserr;
+  double nbb;
+  double nbberr;
+  double nsb;
+  double nsberr;
+  double nbs;
+  double nbserr;
+};
+
+void pull(std::vector<vars>);
 
 void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
 
@@ -106,13 +132,13 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
   RooProdPdf bkgbkg("bkgbkg", "PDF", RooArgSet(bkgx, bkgy));
 
   int num_max = 5999;
-  RooRealVar nss("nss", "number of signal entries", 6, -0.02 * num_max,
+  RooRealVar nss("nss", "number of signal entries", nSigSig, -0.02 * num_max,
                  0.02 * num_max);
-  RooRealVar nsb("nsb", "number of swapped entries", 167,
+  RooRealVar nsb("nsb", "number of swapped entries", nSigBkg,
                  0.001 * num_max, 0.3 * num_max);
-  RooRealVar nbs("nbs", "number of swapped entries", 184,
+  RooRealVar nbs("nbs", "number of swapped entries", nBkgSig,
                  0.001 * num_max, 0.3 * num_max);
-  RooRealVar nbb("nbb", "number of background entries", 5642,
+  RooRealVar nbb("nbb", "number of background entries", nBkgBkg,
                  0 * num_max, 1.1 * num_max);
 
   // 2D PDFs
@@ -147,38 +173,27 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
   RooAddPdf model = *modelptr;
 
   // Fix the signal shape during fitting
-  sigfracx.setConstant();
-  sigma1x.setConstant();
-  sigma2x.setConstant();
-  sigfracy.setConstant();
-  sigma1y.setConstant();
-  sigma2y.setConstant();
+  if (fix_sig) {
+    sigfracx.setConstant();
+    sigma1x.setConstant();
+    sigma2x.setConstant();
+    sigfracy.setConstant();
+    sigma1y.setConstant();
+    sigma2y.setConstant();
+  }
 
-
-  struct vars
-  {
-    Int_t status;
-    double nss;
-    double nsserr;
-    double nbb;
-    double nbberr;
-    double nsb;
-    double nsberr;
-    double nbs;
-    double nbserr;
-  };
 
   auto mset = RooArgSet(m1, m2);
-  RooDataSet* dss = modelsig.generate(mset, 6);
-  RooDataSet* dsb = modelsigbkg.generate(mset, 167);
-  RooDataSet* dbs = modelbkgsig.generate(mset, 184);
-  RooDataSet* dbb = modelbkg.generate(mset, 5642);
+  RooDataSet* dss = modelsig.generate(mset, nSigSig);
+  RooDataSet* dsb = modelsigbkg.generate(mset, nSigBkg);
+  RooDataSet* dbs = modelbkgsig.generate(mset, nBkgSig);
+  RooDataSet* dbb = modelbkg.generate(mset, nBkgBkg);
   RooDataSet* sum = new RooDataSet("sum", "sum", mset);
-  RooDataSet* dww = modelswpswp.generate(mset, 6);
-  RooDataSet* dsw = modelsigswp.generate(mset, 6);
-  RooDataSet* dws = modelswpsig.generate(mset, 6);
-  RooDataSet* dwb = modelswpbkg.generate(mset, 167);
-  RooDataSet* dbw = modelbkgswp.generate(mset, 184);
+  RooDataSet* dww = modelswpswp.generate(mset, nSigSig);
+  RooDataSet* dsw = modelsigswp.generate(mset, nSigSig);
+  RooDataSet* dws = modelswpsig.generate(mset, nSigSig);
+  RooDataSet* dwb = modelswpbkg.generate(mset, nSigBkg);
+  RooDataSet* dbw = modelbkgswp.generate(mset, nBkgSig);
 
   vars fitted;
   TTree* res = new TTree("res", "res");
@@ -207,25 +222,26 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
   auto canv = new TCanvas("ptcanvas", "Canvas", 800, 600);
   canv->SetFillColor(color::snow2);
 
+  std::vector<vars> fitresults;
   ROOT::EnableThreadSafety();
   for (unsigned i = 0; i < nsamples; ++i) {
       // Generate each component and sum them up
       sum = new RooDataSet("sum", "sum", mset);
-      dss = modelsig.generate(mset, 6);
-      dsb = modelsigbkg.generate(mset, 167);
-      dbs = modelbkgsig.generate(mset, 184);
-      dbb = modelbkg.generate(mset, 5642);
+      dss = modelsig.generate(mset, nSigSig);
+      dsb = modelsigbkg.generate(mset, nSigBkg);
+      dbs = modelbkgsig.generate(mset, nBkgSig);
+      dbb = modelbkg.generate(mset, nBkgBkg);
       sum->append(*dss);
       sum->append(*dsb);
       sum->append(*dbs);
       sum->append(*dbb);
 
       if (use_swap) {
-        dww = modelswpswp.generate(mset, 6);
-        dsw = modelsigswp.generate(mset, 6);
-        dws = modelswpsig.generate(mset, 6);
-        dwb = modelswpbkg.generate(mset, 167);
-        dbw = modelbkgswp.generate(mset, 184);
+        dww = modelswpswp.generate(mset, nSigSig);
+        dsw = modelsigswp.generate(mset, nSigSig);
+        dws = modelswpsig.generate(mset, nSigSig);
+        dwb = modelswpbkg.generate(mset, nSigBkg);
+        dbw = modelbkgswp.generate(mset, nBkgSig);
         sum->append(*dww);
         sum->append(*dsw);
         sum->append(*dws);
@@ -235,10 +251,10 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
 
       // reset fitted variables to the "answer"
       if (cheat) {
-        nss.setVal(6);
-        nsb.setVal(167);
-        nbs.setVal(184);
-        nbb.setVal(5642);
+        nss.setVal(nSigSig);
+        nsb.setVal(nSigBkg);
+        nbs.setVal(nBkgSig);
+        nbb.setVal(nBkgBkg);
         mean.setVal(mass_dzero);
         a1.setVal(-0.2);
         a2.setVal(0.02);
@@ -271,6 +287,7 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
       fitted.nsberr = nsb.getError();
       res->Fill();
 
+      fitresults.push_back(fitted);
       if (fitted.status) {
         std::cout << "=== Fitting failed for event " << i << "! ===" << "\n";
         std::cout << "Nss global correlation coeff.: " << result->globalCorr("nss") << "\n";
@@ -401,4 +418,23 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
   TFile fout("mccorr.root", "RECREATE");
   res->Write();
   fout.Close();
+  pull(fitresults);
+}
+
+void pull(std::vector<vars> results) {
+  TH1D hSigpull("sigpull", "pull of signal-signal", 60, -5, 5);
+  TH1D hBkgpull("bkgpull", "pull of bkg-bkg", 60, -5, 5);
+  for (auto evt : results) {
+    double sigPull = (evt.nss - nSigSig) / evt.nsserr;
+    double bkgPull = (evt.nbb - nBkgBkg) / evt.nbberr;
+    hSigpull.Fill(sigPull);
+    hBkgpull.Fill(bkgPull);
+  }
+  auto canv = new TCanvas("ptcanvas", "Canvas", 800, 600);
+  canv->SetFillColor(color::snow2);
+  hSigpull.Draw();
+  canv->SaveAs("sigpull.png");
+  hBkgpull.Draw();
+  canv->SaveAs("bkgpull.png");
+  return;
 }
