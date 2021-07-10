@@ -279,7 +279,7 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
         sigmasx.setConstant();
         sigmasy.setConstant();
 
-        result->Print();
+        // result->Print();
       }
 
       // reset fitted variables to the "answer"
