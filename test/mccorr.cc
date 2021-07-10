@@ -23,10 +23,10 @@
 constexpr bool cheat = true;
 // whether to include the swap components
 constexpr bool use_swap = false;
-// whether to use data instead of MC
+// whether to use data instead of MC (Not implemented yet)
 constexpr bool use_data = false;
 // whether to fix the signal shape during the fit
-constexpr bool fix_sig = true;
+constexpr bool fix_sig = false;
 
 
 
@@ -153,6 +153,9 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
   RooAddPdf modelswpbkg("modelswpbkg", "composite pdf", RooArgList(swpbkg), RooArgList(nsb));
   RooAddPdf modelbkgswp("modelbkgswp", "composite pdf", RooArgList(bkgswp), RooArgList(nbs));
 
+  RooAddPdf modelsw("modelsw", "composite pdf of signal and swap",
+                    RooArgList(sigsig, sigswp, swpsig, swpswp), RooArgList(nss, nss, nss, nss));
+
   RooAddPdf modelsb(
       "modelsb", "composite pdf",
       RooArgList(sigsig, sigbkg, bkgsig, bkgbkg), RooArgList(nss, nsb, nbs, nbb));
@@ -171,16 +174,6 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
     modelptr = new RooAddPdf(modelsbw, "model");
   }
   RooAddPdf model = *modelptr;
-
-  // Fix the signal shape during fitting
-  if (fix_sig) {
-    sigfracx.setConstant();
-    sigma1x.setConstant();
-    sigma2x.setConstant();
-    sigfracy.setConstant();
-    sigma1y.setConstant();
-    sigma2y.setConstant();
-  }
 
 
   auto mset = RooArgSet(m1, m2);
@@ -236,17 +229,57 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
       sum->append(*dbs);
       sum->append(*dbb);
 
+      dww = modelswpswp.generate(mset, nSigSig);
+      dsw = modelsigswp.generate(mset, nSigSig);
+      dws = modelswpsig.generate(mset, nSigSig);
+      dwb = modelswpbkg.generate(mset, nSigBkg);
+      dbw = modelbkgswp.generate(mset, nBkgSig);
+
+
       if (use_swap) {
-        dww = modelswpswp.generate(mset, nSigSig);
-        dsw = modelsigswp.generate(mset, nSigSig);
-        dws = modelswpsig.generate(mset, nSigSig);
-        dwb = modelswpbkg.generate(mset, nSigBkg);
-        dbw = modelbkgswp.generate(mset, nBkgSig);
         sum->append(*dww);
         sum->append(*dsw);
         sum->append(*dws);
         sum->append(*dbw);
         sum->append(*dwb);
+      }
+
+      // Use gen signals and swaps to fit the shapes of signal and swap PDF
+      // Fix the signal shape during fitting
+      if (fix_sig) {
+        RooDataSet* dnobkg = new RooDataSet("dnobkg", "PDF about signals and swaps", mset);
+
+        auto dssmc = modelsig.generate(mset, 30 * nSigSig);
+        auto dwwmc = modelswpswp.generate(mset, 30 * nSigSig);
+        auto dswmc = modelsigswp.generate(mset, 30 * nSigSig);
+        auto dwsmc = modelswpsig.generate(mset, 30 * nSigSig);
+
+        dnobkg->append(*dssmc);
+        dnobkg->append(*dswmc);
+        dnobkg->append(*dwsmc);
+        dnobkg->append(*dwwmc);
+
+        sigfracx.setConstant(false);
+        sigma1x.setConstant(false);
+        sigma2x.setConstant(false);
+        sigfracy.setConstant(false);
+        sigma1y.setConstant(false);
+        sigma2y.setConstant(false);
+        sigmasx.setConstant(false);
+        sigmasy.setConstant(false);
+        RooFitResult* result;
+        result = modelsw.fitTo(*dnobkg, Extended(), Save(), NumCPU(4));
+
+        sigfracx.setConstant();
+        sigma1x.setConstant();
+        sigma2x.setConstant();
+        sigfracy.setConstant();
+        sigma1y.setConstant();
+        sigma2y.setConstant();
+        sigmasx.setConstant();
+        sigmasy.setConstant();
+
+        result->Print();
       }
 
       // reset fitted variables to the "answer"
@@ -262,8 +295,6 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
         b1.setVal(-0.2);
         b2.setVal(0.02);
         b3.setVal(0.0);
-        sigmasx.setVal(0.1);
-        sigmasy.setVal(0.1);
       }
 
       // fit on the combined PDF
