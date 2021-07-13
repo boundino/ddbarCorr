@@ -16,6 +16,7 @@
 #include "TString.h"
 #include "TTree.h"
 #include "TFile.h"
+#include "TROOT.h"
 
 #include <algorithm>
 
@@ -438,7 +439,7 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
           }
           leg->Draw("same");
 
-          canv->SaveAs("evt_" + std::to_string(i) + "_" + name + ".png");
+          canv->SaveAs(TString::Format("evt_%i_", i) + name + ".png");
         }
 
         if (exit_on_corr) break;
