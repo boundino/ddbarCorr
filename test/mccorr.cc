@@ -89,30 +89,31 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
 
   RooRealVar mean("mean", "mean of gaussians", mass_dzero, mass_dzero - 0.01,
                   mass_dzero + 0.01);
-  RooRealVar sigma1x("sigma1x", "width of gaussians", 0.04, 0.011, 0.15);
-  RooRealVar sigma2x("sigma2x", "width of gaussians", 0.01, 0.001, 0.011);
+  double epsilon = 1e-9;
+  RooRealVar sigma1x("sigma1x", "width of gaussians", 0.04, epsilon, 20);
+  RooRealVar sigma2x("sigma2x", "width of gaussians", 0.01, epsilon, 0.03);
   RooGaussian sig1x("sig1x", "Signal component 1", m1, mean, sigma1x);
   RooGaussian sig2x("sig2x", "Signal component 2", m1, mean, sigma2x);
 
-  RooRealVar sigma1y("sigma1y", "width of gaussians", 0.04, 0.011, 0.15);
-  RooRealVar sigma2y("sigma2y", "width of gaussians", 0.01, 0.001, 0.011);
+  RooRealVar sigma1y("sigma1y", "width of gaussians", 0.04, epsilon, 20);
+  RooRealVar sigma2y("sigma2y", "width of gaussians", 0.01, epsilon, 0.03);
   RooGaussian sig1y("sig1y", "Signal component 1", m2, mean, sigma1y);
   RooGaussian sig2y("sig2y", "Signal component 2", m2, mean, sigma2y);
 
   // Build 3rd-order Chebychev polynomial p.d.f. as combinatorial background
-  RooRealVar a1("a1", "a1", -0.2, -.8, .8);
-  RooRealVar a2("a2", "a2", 0.02, -.1, .1);
-  RooRealVar a3("a3", "a3", 0.0, -.1, .1);
+  RooRealVar a1("a1", "a1", -0.2, -1, 1);
+  RooRealVar a2("a2", "a2", 0.02, -1, 1);
+  RooRealVar a3("a3", "a3", 0.0, -1, 1);
   RooChebychev bkgx("bkgx", "Background", m1, RooArgSet(a1, a2, a3));
 
-  RooRealVar b1("b1", "b1", -0.2, -.8, .8);
-  RooRealVar b2("b2", "b2", 0.02, -.1, .1);
-  RooRealVar b3("b3", "b3", 0.0, -.1, .1);
+  RooRealVar b1("b1", "b1", -0.2, -1, 1);
+  RooRealVar b2("b2", "b2", 0.02, -1, 1);
+  RooRealVar b3("b3", "b3", 0.0, -1, 1);
   RooChebychev bkgy("bkgy", "Background", m2, RooArgSet(b1, b2, b3));
 
   // Gaussian as swapped K pi mass
-  RooRealVar sigmasx("sigmasx", "width of swapped mass", 0.1, 0.03, 2);
-  RooRealVar sigmasy("sigmasy", "width of swapped mass", 0.1, 0.03, 2);
+  RooRealVar sigmasx("sigmasx", "width of swapped mass", 0.1, epsilon, 2);
+  RooRealVar sigmasy("sigmasy", "width of swapped mass", 0.1, epsilon, 2);
 
   RooGaussian swpx("swpx", "swapped k pi mass", m1, mean, sigmasx);
   RooGaussian swpy("swpy", "swapped k pi mass", m2, mean, sigmasy);
@@ -121,10 +122,10 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
 
   // Sum the signal components into a composite signal p.d.f.
   RooRealVar sigfracx("sigfracx", "fraction of component 1 in signal", 0.5,
-                      0.001, 0.999);
+                      -epsilon, 1 - epsilon);
   RooAddPdf sigx("sigx", "Signal", RooArgList(sig1x, sig2x), sigfracx);
   RooRealVar sigfracy("sigfracy", "fraction of component 1 in signal", 0.5,
-                      0.001, 0.999);
+                      epsilon, 1 - epsilon);
   RooAddPdf sigy("sigy", "Signal", RooArgList(sig1y, sig2y), sigfracy);
 
   RooProdPdf sigsig("sigsig", "PDF", RooArgSet(sigx, sigy));
@@ -139,12 +140,14 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
 
   int num_max = 5999;
   RooRealVar nss("nss", "number of signal entries", nSigSig, -0.02 * num_max,
-                 0.02 * num_max);
+                 0.2 * num_max);
   RooRealVar nsb("nsb", "number of swapped entries", nSigBkg,
-                 0.001 * num_max, 0.3 * num_max);
+                 0 * num_max, 0.9 * num_max);
   RooRealVar nbs("nbs", "number of swapped entries", nBkgSig,
-                 0.001 * num_max, 0.3 * num_max);
+                 0 * num_max, 0.9 * num_max);
   RooRealVar nbb("nbb", "number of background entries", nBkgBkg,
+                 0 * num_max, 1.1 * num_max);
+  RooRealVar nsw("nsw", "number of signal-swap entries", nBkgBkg,
                  0 * num_max, 1.1 * num_max);
 
   // 2D PDFs
