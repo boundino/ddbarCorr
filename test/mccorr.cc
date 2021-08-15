@@ -298,16 +298,16 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
       // Fix the signal shape during fitting
       if (fix_sig) {
         RooDataSet* dnobkg = new RooDataSet("dnobkg", "PDF about signals and swaps", mset);
-
         auto dssmc = modelsig.generate(mset, 30 * nSigSig);
-        auto dwwmc = modelswpswp.generate(mset, 30 * nSigSig);
-        auto dswmc = modelsigswp.generate(mset, 30 * nSigSig);
-        auto dwsmc = modelswpsig.generate(mset, 30 * nSigSig);
-
         dnobkg->append(*dssmc);
-        dnobkg->append(*dswmc);
-        dnobkg->append(*dwsmc);
-        dnobkg->append(*dwwmc);
+        if (use_swap) {
+          auto dwwmc = modelswpswp.generate(mset, 30 * nSigSig);
+          auto dswmc = modelsigswp.generate(mset, 30 * nSigSig);
+          auto dwsmc = modelswpsig.generate(mset, 30 * nSigSig);
+          dnobkg->append(*dswmc);
+          dnobkg->append(*dwsmc);
+          dnobkg->append(*dwwmc);
+        }
 
         sigfracx.setConstant(false);
         sigma1x.setConstant(false);
@@ -317,9 +317,12 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
         sigma2y.setConstant(false);
         sigmasx.setConstant(false);
         sigmasy.setConstant(false);
-        RooFitResult* result;
-        result = modelsw.fitTo(*dnobkg, Extended(), Save(), NumCPU(4));
-
+        RooFitResult* sigResult;
+        if (use_swap) {
+          sigResult = modelsw.fitTo(*dnobkg, Extended(), Save());
+        } else {
+          sigResult = modelsig.fitTo(*dnobkg, Extended(), Save());
+        }
         sigfracx.setConstant();
         sigma1x.setConstant();
         sigma2x.setConstant();
@@ -328,8 +331,6 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
         sigma2y.setConstant();
         sigmasx.setConstant();
         sigmasy.setConstant();
-
-        // result->Print();
       }
 
       // reset fitted variables to the "answer"
