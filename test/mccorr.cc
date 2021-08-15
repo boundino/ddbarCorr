@@ -239,8 +239,8 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
   // Suppress most messages
   RooMsgService::instance().getStream(1).removeTopic(Integration);
   RooMsgService::instance().getStream(1).removeTopic(Plotting);
-  RooMsgService::instance().getStream(1).removeTopic(Minimization);
-  RooMsgService::instance().setSilentMode(true);
+  // RooMsgService::instance().getStream(1).removeTopic(Minimization);
+  // RooMsgService::instance().setSilentMode(true);
 
   // plotting
   auto canv = new TCanvas("ptcanvas", "Canvas", 800, 600);
