@@ -196,6 +196,7 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
   RooDataSet* dws = modelswpsig.generate(mset, nSigSig);
   RooDataSet* dwb = modelswpbkg.generate(mset, nSigBkg);
   RooDataSet* dbw = modelbkgswp.generate(mset, nBkgSig);
+  RooFitResult* result = model.fitTo(*sum, Extended());
 
   vars fitted;
   TTree* res = new TTree("res", "res");
@@ -213,6 +214,7 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
   res->Branch("dbs", &dbs);
   res->Branch("dbb", &dbb);
   res->Branch("sum", &sum);
+  res->Branch("fitresult", &result);
 
   // Suppress most messages
   RooMsgService::instance().getStream(1).removeTopic(Integration);
