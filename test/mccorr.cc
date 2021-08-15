@@ -183,9 +183,29 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
     modelptr = new RooAddPdf(modelsbw, "model");
   }
   RooAddPdf model = *modelptr;
-
-
   auto mset = RooArgSet(m1, m2);
+
+  // default values
+  double mean_ini = mean.getValV();
+  double sigma1x_ini = sigma1x.getValV();
+  double sigma2x_ini = sigma2x.getValV();
+  double sigma1y_ini = sigma1y.getValV();
+  double sigma2y_ini = sigma2y.getValV();
+  double sigmasx_ini = sigmasx.getValV();
+  double sigmasy_ini = sigmasy.getValV();
+  double sigfracx_ini = sigfracx.getValV();
+  double sigfracy_ini = sigfracy.getValV();
+  double b1_ini = b1.getValV();
+  double b2_ini = b2.getValV();
+  double b3_ini = b3.getValV();
+  double a1_ini = a1.getValV();
+  double a2_ini = a2.getValV();
+  double a3_ini = a3.getValV();
+  double nss_ini = nss.getValV();
+  double nsb_ini = nsb.getValV();
+  double nbs_ini = nbs.getValV();
+  double nbb_ini = nbb.getValV();
+
   RooDataSet* dss = modelsig.generate(mset, nSigSig);
   RooDataSet* dsb = modelsigbkg.generate(mset, nSigBkg);
   RooDataSet* dbs = modelbkgsig.generate(mset, nBkgSig);
@@ -229,6 +249,25 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
   std::vector<vars> fitresults;
   ROOT::EnableThreadSafety();
   for (unsigned i = 0; i < nsamples; ++i) {
+    // reset variables to their initial values
+    sigma1x.setVal(sigma1x_ini);
+    sigma2x.setVal(sigma2x_ini);
+    sigma1y.setVal(sigma1y_ini);
+    sigma2y.setVal(sigma2y_ini);
+    sigmasx.setVal(sigmasx_ini);
+    sigmasy.setVal(sigmasy_ini);
+    sigfracx.setVal(sigfracx_ini);
+    sigfracy.setVal(sigfracy_ini);
+    b1.setVal(b1_ini);
+    b2.setVal(b2_ini);
+    b3.setVal(b3_ini);
+    a1.setVal(a1_ini);
+    a2.setVal(a2_ini);
+    a3.setVal(a3_ini);
+    nss.setVal(nss_ini);
+    nsb.setVal(nsb_ini);
+    nbs.setVal(nbs_ini);
+    nbb.setVal(nbb_ini);
       // Generate each component and sum them up
       sum = new RooDataSet("sum", "sum", mset);
       dss = modelsig.generate(mset, nSigSig);
