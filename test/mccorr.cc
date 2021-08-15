@@ -17,8 +17,11 @@
 #include "TTree.h"
 #include "TFile.h"
 #include "TROOT.h"
+#include "TColor.h"
+#include "TLegend.h"
 
 #include <algorithm>
+#include <memory>
 
 // whether to set the initial values of the fitting parameters to the answer
 constexpr bool cheat = true;
@@ -27,7 +30,9 @@ constexpr bool use_swap = false;
 // whether to use data instead of MC (Not implemented yet)
 constexpr bool use_data = false;
 // whether to fix the signal shape during the fit
-constexpr bool fix_sig = false;
+constexpr bool fix_sig = true;
+// whether to fit observables one by one
+constexpr bool one_by_one = false;
 
 
 
@@ -299,8 +304,26 @@ void mccorr(UInt_t nsamples = 200, bool exit_on_corr = false) {
       }
 
       // fit on the combined PDF
-      RooFitResult* result;
-      result = model.fitTo(*sum, Extended(), Save(), NumCPU(6));
+      // result = model.fitTo(*sum, Extended(), Save(), NumCPU(6));
+      result = model.fitTo(*sum, Extended(), Save());
+      // result = model.fitTo(*sum, Extended(), Save(), Minimizer("Minuit2", "Migrad"));
+      // result = model.fitTo(*sum, Extended(), Save(), Minimizer("Minuit2", "Migrad"), Offset(true));
+
+
+      std::vector<RooRealVar*> allvar {&nss, &nsb, &nbs, &nbb, &mean,
+        &a1, &a2, &a3, &b1, &b2, &b3};
+      if (one_by_one) {
+        // fix all observables
+        for (auto& var: allvar) {
+          var->setConstant(true);
+        }
+        // release one by one
+        for (auto& var: allvar) {
+          std::cout << "releasing " << var->GetName() << "\n";
+          var->setConstant(false);
+          result = model.fitTo(*sum, Extended(), Save());
+        }
+      }
       fitted.status = result->status();
 
       std::cout << "Fitting result: " <<
